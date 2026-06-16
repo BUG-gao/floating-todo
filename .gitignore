@@ -1,0 +1,12 @@
+# Swift / SwiftPM 构建产物
+.build/
+Package.resolved
+
+# macOS
+.DS_Store
+
+# 工具临时目录
+.superpowers/
+
+# 打包临时文件
+dist/*.tmp.dmg
