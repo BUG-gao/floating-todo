@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="system">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>悬浮待办</title>
+    <script type="module" src="/main.js" defer></script>
+  </head>
+  <body>
+    <div id="panel" class="panel">
+      <div id="app"></div>
+    </div>
+
+    <!-- 缩放手柄（无边框窗口） -->
+    <div class="resize n"  data-dir="North"></div>
+    <div class="resize s"  data-dir="South"></div>
+    <div class="resize e"  data-dir="East"></div>
+    <div class="resize w"  data-dir="West"></div>
+    <div class="resize ne" data-dir="NorthEast"></div>
+    <div class="resize nw" data-dir="NorthWest"></div>
+    <div class="resize se" data-dir="SouthEast"></div>
+    <div class="resize sw" data-dir="SouthWest"></div>
+  </body>
+</html>

@@ -1,0 +1,60 @@
+<svg width="1200" height="380" viewBox="0 0 1200 380" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, 'PingFang SC', 'Segoe UI', sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1f3a6e"/>
+      <stop offset="0.5" stop-color="#2767c8"/>
+      <stop offset="1" stop-color="#4f9bf0"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#eaf2ff" stop-opacity="0.88"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="380" rx="0" fill="url(#bg)"/>
+  <circle cx="1040" cy="60" r="200" fill="#ffffff" opacity="0.06"/>
+  <circle cx="160" cy="340" r="160" fill="#ffffff" opacity="0.05"/>
+
+  <!-- 左侧文案 -->
+  <text x="80" y="140" font-size="58" font-weight="800" fill="#ffffff">悬浮待办</text>
+  <text x="82" y="186" font-size="23" font-weight="500" fill="#dce9ff">Floating Todo · 跨平台桌面悬浮待办小组件</text>
+  <text x="82" y="226" font-size="17" fill="#bcd4ff">常驻桌面 · 半透明 · 始终置顶 · 不打扰你的工作</text>
+
+  <!-- 平台徽标 -->
+  <g transform="translate(82,262)">
+    <rect x="0" y="0" width="118" height="38" rx="19" fill="#ffffff" opacity="0.16"/>
+    <text x="59" y="25" font-size="15" font-weight="600" fill="#ffffff" text-anchor="middle">macOS</text>
+    <rect x="132" y="0" width="118" height="38" rx="19" fill="#ffffff" opacity="0.16"/>
+    <text x="191" y="25" font-size="15" font-weight="600" fill="#ffffff" text-anchor="middle">Windows</text>
+    <rect x="264" y="0" width="150" height="38" rx="19" fill="#ffffff" opacity="0.16"/>
+    <text x="339" y="25" font-size="15" font-weight="600" fill="#ffffff" text-anchor="middle">免费 · 开源</text>
+  </g>
+
+  <!-- 右侧迷你小组件 -->
+  <g transform="translate(840,52)">
+    <rect x="0" y="0" width="280" height="276" rx="24" fill="url(#card)"/>
+    <text x="22" y="40" font-size="17" font-weight="700" fill="#18233a">悬浮待办</text>
+    <circle cx="244" cy="34" r="14" fill="#1573ff" opacity="0.16"/>
+    <text x="244" y="39" font-size="12" font-weight="700" fill="#1573ff" text-anchor="middle">2</text>
+
+    <rect x="22" y="58" width="236" height="44" rx="14" fill="#0a1a3a" opacity="0.05"/>
+    <rect x="27" y="63" width="74" height="34" rx="10" fill="#ffffff"/>
+    <text x="64" y="85" font-size="12" font-weight="600" fill="#18233a" text-anchor="middle">今天</text>
+    <text x="150" y="85" font-size="12" font-weight="600" fill="#5d6b85" text-anchor="middle">明天</text>
+    <text x="226" y="85" font-size="12" font-weight="600" fill="#5d6b85" text-anchor="middle">后天</text>
+
+    <rect x="22" y="114" width="236" height="34" rx="11" fill="#1573ff" opacity="0.1"/>
+    <text x="34" y="135" font-size="12" font-weight="600" fill="#1573ff">↻ 每天 · 梳理货源</text>
+
+    <rect x="22" y="156" width="236" height="34" rx="11" fill="#ffffff" opacity="0.7"/>
+    <circle cx="40" cy="173" r="8" fill="none" stroke="#5d6b85" stroke-width="2"/>
+    <text x="56" y="178" font-size="13" fill="#18233a">回复客户消息</text>
+
+    <rect x="22" y="198" width="236" height="34" rx="11" fill="#ffffff" opacity="0.45"/>
+    <circle cx="40" cy="215" r="8" fill="#29ab56"/>
+    <path d="M36 215 l3 3 l5 -6" fill="none" stroke="#fff" stroke-width="2"/>
+    <text x="56" y="220" font-size="13" fill="#5d6b85" text-decoration="line-through">写日报</text>
+
+    <rect x="22" y="240" width="236" height="20" rx="10" fill="#ffffff" opacity="0.6"/>
+  </g>
+</svg>
