@@ -74,9 +74,9 @@
 
 | 平台 | 安装包 | 说明 |
 |------|--------|------|
-| 🍎 macOS (Apple 芯片) | `悬浮待办_x.x.x_aarch64.dmg` | M 系列芯片 |
-| 🍎 macOS (Intel) | `悬浮待办_x.x.x_x64.dmg` | Intel 芯片 |
-| 🪟 Windows | `悬浮待办_x.x.x_x64-setup.exe` | Win10/11 64 位 |
+| 🍎 macOS (Apple 芯片) | `floating-todo_x.x.x_aarch64.dmg` | M 系列芯片 |
+| 🍎 macOS (Intel) | `floating-todo_x.x.x_x64.dmg` | Intel 芯片 |
+| 🪟 Windows | `floating-todo_x.x.x_x64-setup.exe` | Win10/11 64 位 |
 
 > macOS 支持 11+，Windows 支持 10/11。
 

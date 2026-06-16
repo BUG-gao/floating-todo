@@ -48,3 +48,22 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+
+  rename-assets:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 规整安装包文件名（去掉中文产品名被清洗后留下的下划线前缀）
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ github.ref_name }}"
+          gh api "repos/${{ github.repository }}/releases/tags/$tag" \
+            --jq '.assets[] | "\(.id) \(.name)"' | while read -r id name; do
+            case "$name" in
+              _*) gh api -X PATCH "repos/${{ github.repository }}/releases/assets/$id" \
+                    -f name="floating-todo${name}" && echo "renamed $name -> floating-todo${name}" ;;
+            esac
+          done
