@@ -76,10 +76,10 @@ final class TodoStoreTests: XCTestCase {
         store.add("10:00 日程确认")
 
         let id = store.items().first!.id
-        store.updateItem(id: id, title: "10:00 日程确认", detail: "https://example.com/task-note")
+        store.updateItem(id: id, title: "10:00 日程确认", detail: "确认今日安排")
 
         XCTAssertEqual(store.items().first?.title, "10:00 日程确认")
-        XCTAssertEqual(store.items().first?.detail, "https://example.com/task-note")
+        XCTAssertEqual(store.items().first?.detail, "确认今日安排")
 
         store.updateDetail(id: id, detail: "   ")
         XCTAssertEqual(store.items().first?.detail, "")

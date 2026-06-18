@@ -55,10 +55,9 @@
   <text x="90" y="247" font-size="13" font-weight="500" fill="#18233a">检查待办清单</text>
 
   <!-- 待办列表 -->
-  <rect x="48" y="276" width="284" height="48" rx="16" fill="#ffffff" opacity="0.42"/>
+  <rect x="48" y="276" width="284" height="40" rx="16" fill="#ffffff" opacity="0.42"/>
   <circle cx="68" cy="300" r="9" fill="none" stroke="#5d6b85" stroke-width="2"/>
-  <text x="86" y="298" font-size="14" font-weight="500" fill="#18233a">10:00 日程确认</text>
-  <text x="86" y="314" font-size="11" fill="#1573ff" text-decoration="underline">https://example.com/task-note</text>
+  <text x="86" y="305" font-size="14" font-weight="500" fill="#18233a">10:00 日程确认</text>
 
   <rect x="48" y="332" width="284" height="40" rx="16" fill="#ffffff" opacity="0.42"/>
   <circle cx="68" cy="352" r="9" fill="none" stroke="#5d6b85" stroke-width="2"/>
