@@ -15,10 +15,10 @@ final class TodoStoreTests: XCTestCase {
         let defaults = makeDefaults()
         let store = TodoStore(storage: defaults, storageKey: storageKey)
 
-        let item = store.add("  写日报  ")
+        let item = store.add("  归档笔记  ")
         let emptyItem = store.add("   ")
 
-        XCTAssertEqual(store.items().map(\.title), ["写日报"])
+        XCTAssertEqual(store.items().map(\.title), ["归档笔记"])
         XCTAssertEqual(store.incompleteCount(), 1)
         XCTAssertEqual(item?.id, store.items().first?.id)
         XCTAssertNil(emptyItem)
@@ -73,13 +73,13 @@ final class TodoStoreTests: XCTestCase {
     func testUpdateItemDetail() {
         let defaults = makeDefaults()
         let store = TodoStore(storage: defaults, storageKey: storageKey)
-        store.add("10点45晨会")
+        store.add("10:00 日程确认")
 
         let id = store.items().first!.id
-        store.updateItem(id: id, title: "10点45晨会", detail: "https://meeting.example.com/standup")
+        store.updateItem(id: id, title: "10:00 日程确认", detail: "https://example.com/task-note")
 
-        XCTAssertEqual(store.items().first?.title, "10点45晨会")
-        XCTAssertEqual(store.items().first?.detail, "https://meeting.example.com/standup")
+        XCTAssertEqual(store.items().first?.title, "10:00 日程确认")
+        XCTAssertEqual(store.items().first?.detail, "https://example.com/task-note")
 
         store.updateDetail(id: id, detail: "   ")
         XCTAssertEqual(store.items().first?.detail, "")
@@ -214,13 +214,13 @@ final class TodoStoreTests: XCTestCase {
         let firstStore = TodoStore(storage: defaults, storageKey: storageKey)
 
         firstStore.setMemoEnabled(true)
-        firstStore.updateMemoText("  会议号 12345\n客户链接  ")
+        firstStore.updateMemoText("  参考编号 0000\n临时参考链接  ")
         firstStore.setMemoExpanded(false)
 
         let secondStore = TodoStore(storage: defaults, storageKey: storageKey)
 
         XCTAssertTrue(secondStore.settings.memoEnabled)
-        XCTAssertEqual(secondStore.memo.text, "会议号 12345\n客户链接")
+        XCTAssertEqual(secondStore.memo.text, "参考编号 0000\n临时参考链接")
         XCTAssertFalse(secondStore.memo.isExpanded)
     }
 
@@ -346,16 +346,16 @@ final class TodoStoreTests: XCTestCase {
     func testPinAndUnpinRecurring() {
         let defaults = makeDefaults()
         let store = TodoStore(storage: defaults, storageKey: storageKey)
-        store.add("每天梳理货源", to: .today)
+        store.add("每天整理资料", to: .today)
 
         let id = store.items(for: .today).first!.id
         store.pinAsRecurring(id: id, from: .today)
 
         XCTAssertTrue(store.items(for: .today).isEmpty)
-        XCTAssertEqual(store.recurringItems.map(\.title), ["每天梳理货源"])
+        XCTAssertEqual(store.recurringItems.map(\.title), ["每天整理资料"])
 
         store.unpinRecurring(id: id)
-        XCTAssertEqual(store.items(for: .today).map(\.title), ["每天梳理货源"])
+        XCTAssertEqual(store.items(for: .today).map(\.title), ["每天整理资料"])
         XCTAssertTrue(store.recurringItems.isEmpty)
     }
 
@@ -400,11 +400,11 @@ final class TodoStoreTests: XCTestCase {
     func testRecurringPersistsAndTrimsEmpty() {
         let defaults = makeDefaults()
         let firstStore = TodoStore(storage: defaults, storageKey: storageKey)
-        firstStore.addRecurring("  研究 claude 客户端  ")
+        firstStore.addRecurring("  检查待办清单  ")
         XCTAssertNil(firstStore.addRecurring("   "))
 
         let secondStore = TodoStore(storage: defaults, storageKey: storageKey)
-        XCTAssertEqual(secondStore.recurringItems.map(\.title), ["研究 claude 客户端"])
+        XCTAssertEqual(secondStore.recurringItems.map(\.title), ["检查待办清单"])
     }
 
     func testSnapshotDecodeLegacyPayloadWithoutRecurring() throws {
@@ -417,20 +417,20 @@ final class TodoStoreTests: XCTestCase {
         let defaults = makeDefaults()
         let store = TodoStore(storage: defaults, storageKey: storageKey)
 
-        store.add("回复客户消息")
+        store.add("整理收件箱")
         store.add("整理需求清单")
         store.selectedDay = .tomorrow
         store.add("设计悬浮窗视觉")
         store.selectedDay = .today
 
-        let doneTask = store.items().first { $0.title == "回复客户消息" }!
+        let doneTask = store.items().first { $0.title == "整理收件箱" }!
         store.toggle(id: doneTask.id)
 
         let movedTask = store.items().first { $0.title == "整理需求清单" }!
         store.moveItem(id: movedTask.id, from: .today, to: .dayAfterTomorrow)
 
         XCTAssertEqual(store.incompleteCount(for: .today), 0)
-        XCTAssertEqual(store.items(for: .today).filter(\.isCompleted).map(\.title), ["回复客户消息"])
+        XCTAssertEqual(store.items(for: .today).filter(\.isCompleted).map(\.title), ["整理收件箱"])
         XCTAssertEqual(store.items(for: .tomorrow).map(\.title), ["设计悬浮窗视觉"])
         XCTAssertEqual(store.items(for: .dayAfterTomorrow).map(\.title), ["整理需求清单"])
     }

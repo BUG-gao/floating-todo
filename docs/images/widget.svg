@@ -49,25 +49,25 @@
   <text x="62" y="192" font-size="12" font-weight="600" fill="#1573ff">↻ 每天</text>
   <rect x="58" y="200" width="264" height="26" rx="9" fill="#ffffff" opacity="0.5"/>
   <circle cx="74" cy="213" r="7" fill="none" stroke="#5d6b85" stroke-width="2"/>
-  <text x="90" y="217" font-size="13" font-weight="500" fill="#18233a">梳理货源</text>
+  <text x="90" y="217" font-size="13" font-weight="500" fill="#18233a">整理资料</text>
   <rect x="58" y="230" width="264" height="26" rx="9" fill="#ffffff" opacity="0.5"/>
   <circle cx="74" cy="243" r="7" fill="none" stroke="#5d6b85" stroke-width="2"/>
-  <text x="90" y="247" font-size="13" font-weight="500" fill="#18233a">研究 claude 客户端</text>
+  <text x="90" y="247" font-size="13" font-weight="500" fill="#18233a">检查待办清单</text>
 
   <!-- 待办列表 -->
   <rect x="48" y="276" width="284" height="48" rx="16" fill="#ffffff" opacity="0.42"/>
   <circle cx="68" cy="300" r="9" fill="none" stroke="#5d6b85" stroke-width="2"/>
-  <text x="86" y="298" font-size="14" font-weight="500" fill="#18233a">10点45 晨会</text>
-  <text x="86" y="314" font-size="11" fill="#1573ff" text-decoration="underline">https://meeting.example.com/standup</text>
+  <text x="86" y="298" font-size="14" font-weight="500" fill="#18233a">10:00 日程确认</text>
+  <text x="86" y="314" font-size="11" fill="#1573ff" text-decoration="underline">https://example.com/task-note</text>
 
   <rect x="48" y="332" width="284" height="40" rx="16" fill="#ffffff" opacity="0.42"/>
   <circle cx="68" cy="352" r="9" fill="none" stroke="#5d6b85" stroke-width="2"/>
-  <text x="86" y="357" font-size="14" font-weight="500" fill="#18233a">回复客户消息</text>
+  <text x="86" y="357" font-size="14" font-weight="500" fill="#18233a">整理收件箱</text>
 
   <rect x="48" y="380" width="284" height="40" rx="16" fill="#ffffff" opacity="0.28"/>
   <circle cx="68" cy="400" r="9" fill="#29ab56"/>
   <path d="M64 400 l3 3 l5 -6" fill="none" stroke="#fff" stroke-width="2"/>
-  <text x="86" y="405" font-size="14" font-weight="500" fill="#5d6b85" text-decoration="line-through">写日报</text>
+  <text x="86" y="405" font-size="14" font-weight="500" fill="#5d6b85" text-decoration="line-through">归档笔记</text>
 
   <!-- 清除已完成 -->
   <text x="332" y="442" font-size="12" fill="#5d6b85" text-anchor="end">🗑 清除已完成（1）</text>
