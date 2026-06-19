@@ -97,6 +97,7 @@ function defaultState() {
       appearance: "system",
       customBg: null,
       memoEnabled: false,
+      clickThrough: false,
     },
     memo: { text: "", expanded: false },
     lastActiveDate: todayStr(),
@@ -348,7 +349,10 @@ function applyWindowChrome() {
     root.style.removeProperty("--panel-top");
     root.style.removeProperty("--panel-bottom");
   }
-  if (appWindow) appWindow.setAlwaysOnTop(!!state.settings.alwaysOnTop).catch(() => {});
+  if (appWindow) {
+    appWindow.setAlwaysOnTop(!!state.settings.alwaysOnTop).catch(() => {});
+    appWindow.setIgnoreCursorEvents(!!state.settings.clickThrough).catch(() => {});
+  }
 }
 
 function rowHtml(it, day, kind) {
@@ -710,6 +714,7 @@ function openSettings() {
   overlay.innerHTML = `<div class="settings">
     <h2>小组件设置</h2>
     <div class="set-row"><span>始终置顶</span><div class="switch ${s.alwaysOnTop ? "on" : ""}" data-s="alwaysOnTop"></div></div>
+    <div class="set-row"><span>鼠标穿透（点击落到下层）</span><div class="switch ${s.clickThrough ? "on" : ""}" data-s="clickThrough"></div></div>
     <div class="set-row"><span>开机自启动</span><div class="switch" id="autostart-sw" data-s="autostart"></div></div>
     <div class="set-row"><span>开启备忘录</span><div class="switch ${s.memoEnabled ? "on" : ""}" data-s="memoEnabled"></div></div>
     <div>
@@ -736,7 +741,8 @@ function openSettings() {
     </div>
     <div style="font-size:11px;color:var(--text-secondary);line-height:1.6">
       💡 全局快捷键 <b>${navigator.platform.includes("Mac") ? "⌘⇧Space" : "Ctrl+Shift+Space"}</b> 可在任意应用中唤起并聚焦输入框，快速记一笔。<br>
-      ⏰ 输入「明天 15:00 开会」会自动识别日期与提醒时间。
+      ⏰ 输入「明天 15:00 开会」会自动识别日期与提醒时间。<br>
+      🖱️ 开启鼠标穿透后浮窗不再挡点击，可从<b>托盘菜单「切换鼠标穿透」</b>关回来。
     </div>
     <div class="set-row" style="justify-content:flex-end"><button class="link-btn" data-s="close">完成</button></div>
   </div>`;
@@ -754,6 +760,15 @@ function openSettings() {
         sw.classList.toggle("on");
       }
       else if (key === "resetBg") { state.settings.customBg = null; overlay.remove(); save(); render(); openSettings(); return; }
+      else if (key === "clickThrough") {
+        state.settings.clickThrough = !state.settings.clickThrough;
+        sw.classList.toggle("on");
+        save();
+        // 开启后浮窗不再响应点击，先关闭设置面板避免被困
+        if (state.settings.clickThrough) overlay.remove();
+        applyWindowChrome();
+        return;
+      }
       else if (key === "autostart") { toggleAutostart(sw); return; }
       else if (key === "export") { exportBackup(); return; }
       else if (key === "import") { importBackup(overlay); return; }
@@ -928,6 +943,13 @@ TAURI?.event?.listen?.("quick-capture", () => {
     const mi = document.getElementById("main-input");
     if (mi) { mi.focus(); mi.select(); }
   }, 60);
+});
+
+// 托盘「切换鼠标穿透」：翻转穿透开关（穿透开启时浮窗点不动，这是唯一可靠的关闭入口）
+TAURI?.event?.listen?.("toggle-passthrough", () => {
+  state.settings.clickThrough = !state.settings.clickThrough;
+  save();
+  applyWindowChrome();
 });
 
 /* ---------------- 启动 ---------------- */

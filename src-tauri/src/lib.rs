@@ -104,8 +104,10 @@ pub fn run() {
 
             let toggle_item =
                 MenuItem::with_id(app, "toggle", "显示/隐藏小组件", true, None::<&str>)?;
+            let passthrough_item =
+                MenuItem::with_id(app, "passthrough", "切换鼠标穿透", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&toggle_item, &quit_item])?;
+            let menu = Menu::with_items(app, &[&toggle_item, &passthrough_item, &quit_item])?;
 
             let _tray = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
@@ -114,6 +116,12 @@ pub fn run() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "toggle" => toggle_window(app),
+                    "passthrough" => {
+                        if let Some(win) = app.get_webview_window("main") {
+                            let _ = win.show();
+                            let _ = win.emit("toggle-passthrough", ());
+                        }
+                    }
                     "quit" => app.exit(0),
                     _ => {}
                 })

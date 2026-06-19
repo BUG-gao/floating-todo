@@ -13,7 +13,7 @@
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-2767c8)](#-下载安装)
 [![Tauri](https://img.shields.io/badge/built%20with-Tauri%202-ffc131?logo=tauri&logoColor=white)](https://tauri.app)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v0.3.0-success)](../../releases)
+[![Release](https://img.shields.io/badge/release-v0.3.1-success)](../../releases)
 [![Stars](https://img.shields.io/github/stars/BUG-gao/floating-todo?style=social)](../../stargazers)
 
 </div>
@@ -75,6 +75,7 @@
 - 📌 始终置顶；🫧 半透明、透明度可调；🎨 自定义背景色 + 跟随系统/浅色/深色。
 - 🖱️ 边缘四角拖拽缩放；缩到最小后一键放大；🔽 紧凑模式只显示今天。
 - 🧭 托盘 / 菜单栏小组件，不占任务栏 / 程序坞。
+- 🖱️ **鼠标穿透**：开启后浮窗不再挡点击，点击落到下层窗口；可从托盘菜单随时切回来。
 - 🚀 **开机自启动**（可在设置里开关）。
 
 ### 数据

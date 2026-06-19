@@ -1,6 +1,6 @@
 [package]
 name = "floating-todo"
-version = "0.3.0"
+version = "0.3.1"
 description = "悬浮待办 · 跨平台桌面悬浮待办小组件"
 authors = ["gaopengfei"]
 edition = "2021"
