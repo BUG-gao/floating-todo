@@ -40,6 +40,52 @@ function dateLabel(offset) {
   return `${d.getMonth() + 1}月${d.getDate()}日`;
 }
 
+const pad = (n) => String(n).padStart(2, "0");
+function yesterdayStr() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return todayStr(d);
+}
+function nowHHMM() {
+  const d = new Date();
+  return pad(d.getHours()) + ":" + pad(d.getMinutes());
+}
+
+/* 从输入里解析时间，如 15:00 / 下午3点半 / 晚上8点30 / 9点 */
+function parseTime(s) {
+  let m = s.match(/(\d{1,2}):(\d{2})/);
+  if (m) {
+    return { time: pad(Math.min(23, +m[1])) + ":" + pad(Math.min(59, +m[2])), match: m[0] };
+  }
+  m = s.match(/(上午|早上|凌晨|下午|晚上|中午)?\s*(\d{1,2})\s*点\s*(半|\d{1,2})?\s*分?/);
+  if (m && (m[1] || m[3] !== undefined || /点/.test(m[0]))) {
+    let h = +m[2];
+    let mm = 0;
+    if (m[3] === "半") mm = 30;
+    else if (m[3]) mm = Math.min(59, +m[3]);
+    const p = m[1];
+    if ((p === "下午" || p === "晚上") && h < 12) h += 12;
+    if (p === "中午" && h < 12) h = 12;
+    if ((p === "凌晨" || p === "早上" || p === "上午") && h === 12) h = 0;
+    return { time: pad(Math.min(23, h)) + ":" + pad(mm), match: m[0] };
+  }
+  return null;
+}
+
+/* 自然语言：识别「明天/后天/今天」分组和时间，返回 {day, time, title} */
+function parseQuickInput(text, defaultDay) {
+  let title = text.trim();
+  let day = defaultDay;
+  if (/^(今天|今日)/.test(title)) { day = "today"; title = title.replace(/^(今天|今日)\s*/, ""); }
+  else if (/^明天/.test(title)) { day = "tomorrow"; title = title.replace(/^明天\s*/, ""); }
+  else if (/^后天/.test(title)) { day = "dayAfterTomorrow"; title = title.replace(/^后天\s*/, ""); }
+
+  let time = null;
+  const t = parseTime(title);
+  if (t) { time = t.time; title = title.replace(t.match, " ").replace(/\s+/g, " ").trim(); }
+  return { day, time, title: title.trim() };
+}
+
 function defaultState() {
   return {
     selectedDay: "today",
@@ -108,12 +154,16 @@ function rollOverIfNeeded() {
   }
   // 过期未完成顺延到今天底部
   result.today = [...result.today, ...overdue];
+  // 新的一天，今天的待办重置提醒标记
+  result.today = result.today.map((it) => ({ ...it, notified: false }));
 
-  // 常驻待办每天重置完成状态，内容保留
-  state.recurringItems = state.recurringItems.map((it) => ({
-    ...it,
-    completed: false,
-  }));
+  // 常驻待办每天重置完成状态与提醒；中断超过一天则连胜清零
+  const y = yesterdayStr();
+  state.recurringItems = state.recurringItems.map((it) => {
+    const reset = { ...it, completed: false, notified: false };
+    if (it.lastDone !== y && it.lastDone !== today) reset.streak = 0;
+    return reset;
+  });
 
   state.itemsByDay = result;
   state.lastActiveDate = today;
@@ -137,10 +187,10 @@ function completedCount(day = state.selectedDay) {
   return items(day).filter((i) => i.completed).length;
 }
 
-function addItem(title, day = state.selectedDay) {
+function addItem(title, day = state.selectedDay, time = null) {
   const t = title.trim();
   if (!t) return null;
-  const it = { id: uid(), title: t, detail: "", completed: false, createdAt: Date.now() };
+  const it = { id: uid(), title: t, detail: "", time, completed: false, notified: false, createdAt: Date.now() };
   state.itemsByDay[day].unshift(it);
   save();
   return it;
@@ -178,14 +228,18 @@ function clearCompleted(day) {
 }
 
 /* 常驻「每天」待办 */
-function addRecurring(title) {
+function addRecurring(title, time = null) {
   const t = title.trim();
   if (!t) return;
   state.recurringItems.unshift({
     id: uid(),
     title: t,
     detail: "",
+    time,
     completed: false,
+    notified: false,
+    streak: 0,
+    lastDone: null,
     createdAt: Date.now(),
   });
   save();
@@ -193,7 +247,25 @@ function addRecurring(title) {
 function toggleRecurring(id) {
   const it = state.recurringItems.find((i) => i.id === id);
   if (!it) return;
-  it.completed = !it.completed;
+  const today = todayStr();
+  if (!it.completed) {
+    it.completed = true;
+    it.notified = true;
+    if (it.lastDone === today) {
+      // 今天已计入连胜
+    } else if (it.lastDone === yesterdayStr()) {
+      it.streak = (it.streak || 0) + 1;
+    } else {
+      it.streak = 1;
+    }
+    it.lastDone = today;
+  } else {
+    it.completed = false;
+    if (it.lastDone === today) {
+      it.streak = Math.max(0, (it.streak || 0) - 1);
+      it.lastDone = it.streak > 0 ? yesterdayStr() : null;
+    }
+  }
   state.recurringItems = stableSort(state.recurringItems);
   save();
 }
@@ -254,6 +326,9 @@ const ICONS = {
   chevron: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>',
   pinOff: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><line x1="2" y1="2" x2="22" y2="22"/><path d="M12 17v5"/><path d="M9 9v1.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h11"/><path d="M15 9.34V6h1a2 2 0 0 0 0-4H7.89"/></svg>',
   arrowRight: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>',
+  clock: '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;margin-right:2px"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>',
+  download: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+  upload: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>',
 };
 
 /* ---------------- 渲染 ---------------- */
@@ -297,10 +372,15 @@ function rowHtml(it, day, kind) {
     }
   }
   const editAct = kind === "recurring" ? "redit" : "edit";
+  const timeChip = it.time ? `<span class="time-chip">${ICONS.clock}${it.time}</span>` : "";
+  const streakChip =
+    kind === "recurring" && it.streak > 0
+      ? `<span class="streak-chip" title="已连续 ${it.streak} 天">🔥${it.streak}</span>`
+      : "";
   return `<div class="row ${it.completed ? "done" : ""}" data-row="${it.id}">
     <div class="check ${it.completed ? "on" : ""}" data-act="${kind === "recurring" ? "rtoggle" : "toggle"}" data-id="${it.id}" data-day="${day}">${it.completed ? ICONS.check : ""}</div>
     <div class="body" data-act="${editAct}" data-id="${it.id}" data-day="${day}">
-      <div class="title">${esc(it.title)}</div>
+      <div class="title">${esc(it.title)}${timeChip}${streakChip}</div>
       ${detail}
     </div>
     ${badge}${actions}
@@ -441,8 +521,20 @@ app.addEventListener("click", (e) => {
 
   switch (act) {
     case "day": state.selectedDay = day; save(); render(); break;
-    case "toggle": toggleItem(id, day); render(); break;
-    case "rtoggle": toggleRecurring(id); render(); break;
+    case "toggle": {
+      const wasOpen = !state.itemsByDay[day].find((i) => i.id === id)?.completed;
+      toggleItem(id, day);
+      if (wasOpen) celebrate(el);
+      render();
+      break;
+    }
+    case "rtoggle": {
+      const wasOpen = !state.recurringItems.find((i) => i.id === id)?.completed;
+      toggleRecurring(id);
+      if (wasOpen) celebrate(el);
+      render();
+      break;
+    }
     case "del": deleteItem(id, day); render(); break;
     case "rdel": deleteRecurring(id); render(); break;
     case "unpin": unpinRecurring(id); render(); break;
@@ -478,7 +570,10 @@ app.addEventListener("keydown", (e) => {
     if (e.target.id === "main-input") { e.preventDefault(); commitMain(); }
     else if (e.target.id === "recur-input") { e.preventDefault(); commitRecur(); }
   }
-  if (e.key === "Escape" && e.target.id === "main-input" && composerEditId) cancelEdit();
+  if (e.key === "Escape" && e.target.id === "main-input") {
+    if (composerEditId) cancelEdit();
+    else { draft = ""; appWindow?.hide().catch(() => {}); }
+  }
 });
 
 function commitMain() {
@@ -488,7 +583,10 @@ function commitMain() {
     updateItem(composerEditId, composerEditDay, t, undefined);
     composerEditId = null; composerEditDay = null;
   } else {
-    addItem(t);
+    const { day, time, title } = parseQuickInput(t, state.selectedDay);
+    if (!title) return;
+    addItem(title, day, time);
+    if (day !== state.selectedDay) state.selectedDay = day;
   }
   draft = ""; focusMain = true; render();
 }
@@ -506,7 +604,12 @@ function commitRecur() {
   const t = recurDraft.trim();
   if (!t) return;
   if (recurEditId) { updateRecurringTitle(recurEditId, t); recurEditId = null; }
-  else addRecurring(t);
+  else {
+    const parsed = parseTime(t);
+    const time = parsed ? parsed.time : null;
+    const title = parsed ? t.replace(parsed.match, " ").replace(/\s+/g, " ").trim() : t;
+    if (title) addRecurring(title, time);
+  }
   recurDraft = ""; focusRecur = true; render();
 }
 function startRecurEdit(id) {
@@ -607,6 +710,7 @@ function openSettings() {
   overlay.innerHTML = `<div class="settings">
     <h2>小组件设置</h2>
     <div class="set-row"><span>始终置顶</span><div class="switch ${s.alwaysOnTop ? "on" : ""}" data-s="alwaysOnTop"></div></div>
+    <div class="set-row"><span>开机自启动</span><div class="switch" id="autostart-sw" data-s="autostart"></div></div>
     <div class="set-row"><span>开启备忘录</span><div class="switch ${s.memoEnabled ? "on" : ""}" data-s="memoEnabled"></div></div>
     <div>
       <div style="font-size:13px;font-weight:500;margin-bottom:6px">外观</div>
@@ -626,6 +730,14 @@ function openSettings() {
       <div class="set-row"><span>透明度</span><span style="color:var(--text-secondary)">${Math.round(s.opacity * 100)}%</span></div>
       <input type="range" id="op-range" min="0.2" max="0.95" step="0.01" value="${s.opacity}"/>
     </div>
+    <div class="set-row" style="gap:8px">
+      <button class="data-btn" data-s="export">${ICONS.download}<span>导出备份</span></button>
+      <button class="data-btn" data-s="import">${ICONS.upload}<span>导入备份</span></button>
+    </div>
+    <div style="font-size:11px;color:var(--text-secondary);line-height:1.6">
+      💡 全局快捷键 <b>${navigator.platform.includes("Mac") ? "⌘⇧Space" : "Ctrl+Shift+Space"}</b> 可在任意应用中唤起并聚焦输入框，快速记一笔。<br>
+      ⏰ 输入「明天 15:00 开会」会自动识别日期与提醒时间。
+    </div>
     <div class="set-row" style="justify-content:flex-end"><button class="link-btn" data-s="close">完成</button></div>
   </div>`;
   document.body.appendChild(overlay);
@@ -642,6 +754,9 @@ function openSettings() {
         sw.classList.toggle("on");
       }
       else if (key === "resetBg") { state.settings.customBg = null; overlay.remove(); save(); render(); openSettings(); return; }
+      else if (key === "autostart") { toggleAutostart(sw); return; }
+      else if (key === "export") { exportBackup(); return; }
+      else if (key === "import") { importBackup(overlay); return; }
       else if (key === "close") { overlay.remove(); }
       save(); applyWindowChrome(); render();
     }
@@ -661,6 +776,50 @@ function openSettings() {
     state.settings.customBg = hexToRgb(e.target.value);
     applyWindowChrome(); save();
   });
+  // 异步同步开机自启动开关的真实状态
+  (async () => {
+    try {
+      const on = await TAURI?.autostart?.isEnabled();
+      overlay.querySelector("#autostart-sw")?.classList.toggle("on", !!on);
+    } catch (e) {}
+  })();
+}
+
+async function toggleAutostart(sw) {
+  try {
+    const on = await TAURI.autostart.isEnabled();
+    if (on) await TAURI.autostart.disable();
+    else await TAURI.autostart.enable();
+    sw.classList.toggle("on", !on);
+  } catch (e) {}
+}
+
+async function exportBackup() {
+  try {
+    await TAURI.core.invoke("export_data", { json: JSON.stringify(state, null, 2) });
+  } catch (e) {}
+}
+
+async function importBackup(overlay) {
+  try {
+    const content = await TAURI.core.invoke("import_data");
+    if (!content) return;
+    const parsed = JSON.parse(content);
+    if (!parsed || !parsed.itemsByDay) return;
+    const base = defaultState();
+    state = {
+      ...base,
+      ...parsed,
+      itemsByDay: { ...base.itemsByDay, ...(parsed.itemsByDay || {}) },
+      settings: { ...base.settings, ...(parsed.settings || {}) },
+      memo: { ...base.memo, ...(parsed.memo || {}) },
+      recurringItems: parsed.recurringItems || [],
+    };
+    save();
+    overlay?.remove();
+    applyWindowChrome();
+    render();
+  } catch (e) {}
 }
 
 function hexToRgb(hex) {
@@ -670,6 +829,69 @@ function hexToRgb(hex) {
 function rgbToHex(rgb) {
   const [r, g, b] = rgb.split(",").map((x) => parseInt(x.trim()));
   return "#" + [r, g, b].map((x) => x.toString(16).padStart(2, "0")).join("");
+}
+
+/* ---------------- 完成撒花 ---------------- */
+
+const CONFETTI_COLORS = ["#1573ff", "#29ab56", "#ffb020", "#ff5d8f", "#7c5cff"];
+function celebrate(anchorEl) {
+  const r = anchorEl.getBoundingClientRect();
+  const cx = r.left + r.width / 2;
+  const cy = r.top + r.height / 2;
+  for (let i = 0; i < 14; i++) {
+    const p = document.createElement("div");
+    p.className = "confetti";
+    p.style.background = CONFETTI_COLORS[i % CONFETTI_COLORS.length];
+    p.style.left = cx + "px";
+    p.style.top = cy + "px";
+    const ang = (Math.PI * 2 * i) / 14 + Math.random() * 0.6;
+    const dist = 26 + Math.random() * 30;
+    p.style.setProperty("--dx", Math.cos(ang) * dist + "px");
+    p.style.setProperty("--dy", (Math.sin(ang) * dist - 18) + "px");
+    document.body.appendChild(p);
+    setTimeout(() => p.remove(), 700);
+  }
+}
+
+/* ---------------- 提醒通知 ---------------- */
+
+async function ensureNotifyPermission() {
+  try {
+    const n = TAURI?.notification;
+    if (!n) return false;
+    let granted = await n.isPermissionGranted();
+    if (!granted) granted = (await n.requestPermission()) === "granted";
+    return granted;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function checkReminders() {
+  const now = nowHHMM();
+  const due = [];
+  let changed = false;
+  const scan = (it) => {
+    if (it.time && !it.completed && !it.notified && it.time <= now) {
+      it.notified = true;
+      due.push(it);
+      changed = true;
+    }
+  };
+  state.itemsByDay.today.forEach(scan);
+  state.recurringItems.forEach(scan);
+  if (changed) save();
+  if (due.length) {
+    const ok = await ensureNotifyPermission();
+    if (ok) {
+      due.forEach((it) =>
+        TAURI.notification.sendNotification({
+          title: "悬浮待办 · 到点提醒",
+          body: `${it.time}　${it.title}`,
+        })
+      );
+    }
+  }
 }
 
 /* ---------------- 窗口尺寸 / 缩放 ---------------- */
@@ -694,11 +916,27 @@ function updateCompact() {
 }
 window.addEventListener("resize", updateCompact);
 
+/* ---------------- 全局快捷键：快速捕获 ---------------- */
+
+TAURI?.event?.listen?.("quick-capture", () => {
+  closeMenu();
+  document.querySelector(".overlay")?.remove();
+  if (compact) expandWindow();
+  focusMain = true;
+  render();
+  setTimeout(() => {
+    const mi = document.getElementById("main-input");
+    if (mi) { mi.focus(); mi.select(); }
+  }, 60);
+});
+
 /* ---------------- 启动 ---------------- */
 
 updateCompact();
 render();
 applyWindowChrome();
 
-// 长时间运行跨午夜时定期检查
+// 跨午夜定期滚动 + 到点提醒
 setInterval(() => render(), 5 * 60 * 1000);
+setInterval(checkReminders, 30 * 1000);
+checkReminders();

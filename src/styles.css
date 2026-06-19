@@ -642,3 +642,59 @@ input[type="color"] {
 .resize.nw { top: 0; left: 0; width: 12px; height: 12px; cursor: nwse-resize; }
 .resize.se { bottom: 0; right: 0; width: 12px; height: 12px; cursor: nwse-resize; }
 .resize.sw { bottom: 0; left: 0; width: 12px; height: 12px; cursor: nesw-resize; }
+
+/* ---------- 时间 / 打卡徽标 ---------- */
+.time-chip {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: rgba(21, 115, 255, 0.12);
+  white-space: nowrap;
+}
+.streak-chip {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #e8821a;
+  white-space: nowrap;
+}
+
+/* ---------- 备份按钮 ---------- */
+.data-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  background: rgba(var(--control-bg), var(--control-alpha));
+  transition: background 0.15s ease;
+}
+.data-btn:hover {
+  color: var(--accent);
+  background: rgba(21, 115, 255, 0.12);
+}
+
+/* ---------- 完成撒花 ---------- */
+.confetti {
+  position: fixed;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 200;
+  animation: confetti-pop 0.7s ease-out forwards;
+}
+@keyframes confetti-pop {
+  0% { transform: translate(0, 0) scale(1) rotate(0deg); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(0.3) rotate(220deg); opacity: 0; }
+}

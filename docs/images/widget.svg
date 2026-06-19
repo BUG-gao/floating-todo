@@ -14,18 +14,15 @@
     </filter>
   </defs>
 
-  <!-- 桌面壁纸（示意半透明透出效果） -->
   <rect width="380" height="600" fill="url(#wall)"/>
   <ellipse cx="80" cy="120" rx="70" ry="26" fill="#ffffff" opacity="0.5"/>
   <ellipse cx="300" cy="90" rx="55" ry="20" fill="#ffffff" opacity="0.45"/>
   <ellipse cx="250" cy="500" rx="90" ry="34" fill="#ffffff" opacity="0.18"/>
 
-  <!-- 面板 -->
   <g filter="url(#sh)">
     <rect x="24" y="26" width="332" height="548" rx="28" fill="url(#panel)" stroke="#ffffff" stroke-opacity="0.6"/>
   </g>
 
-  <!-- 头部 -->
   <text x="48" y="68" font-size="18" font-weight="700" fill="#18233a">悬浮待办</text>
   <text x="48" y="88" font-size="12" font-weight="500" fill="#5d6b85">今天还有 2 件事</text>
   <circle cx="296" cy="70" r="15" fill="#1573ff" opacity="0.16"/>
@@ -33,55 +30,57 @@
   <circle cx="332" cy="70" r="15" fill="#ffffff" opacity="0.5"/>
   <text x="332" y="75" font-size="14" fill="#5d6b85" text-anchor="middle">⚙</text>
 
-  <!-- 日期切换 -->
   <rect x="48" y="104" width="284" height="56" rx="18" fill="#000000" opacity="0.05"/>
   <rect x="54" y="110" width="90" height="44" rx="13" fill="#ffffff" opacity="0.8"/>
   <text x="99" y="130" font-size="13" font-weight="600" fill="#18233a" text-anchor="middle">今天</text>
-  <text x="99" y="146" font-size="10" fill="#5d6b85" text-anchor="middle">6月16日</text>
+  <text x="99" y="146" font-size="10" fill="#5d6b85" text-anchor="middle">6月18日</text>
   <text x="190" y="130" font-size="13" font-weight="600" fill="#5d6b85" text-anchor="middle">明天</text>
-  <text x="190" y="146" font-size="10" fill="#5d6b85" text-anchor="middle">6月17日</text>
+  <text x="190" y="146" font-size="10" fill="#5d6b85" text-anchor="middle">6月19日</text>
   <text x="281" y="130" font-size="13" font-weight="600" fill="#5d6b85" text-anchor="middle">后天</text>
-  <text x="281" y="146" font-size="10" fill="#5d6b85" text-anchor="middle">6月18日</text>
+  <text x="281" y="146" font-size="10" fill="#5d6b85" text-anchor="middle">6月20日</text>
 
-  <!-- 每天常驻区 -->
+  <!-- 每天常驻区（含连续打卡 streak） -->
   <rect x="48" y="172" width="284" height="92" rx="16" fill="#1573ff" opacity="0.08"/>
   <rect x="48" y="172" width="284" height="92" rx="16" fill="none" stroke="#1573ff" stroke-opacity="0.2"/>
   <text x="62" y="192" font-size="12" font-weight="600" fill="#1573ff">↻ 每天</text>
   <rect x="58" y="200" width="264" height="26" rx="9" fill="#ffffff" opacity="0.5"/>
   <circle cx="74" cy="213" r="7" fill="none" stroke="#5d6b85" stroke-width="2"/>
-  <text x="90" y="217" font-size="13" font-weight="500" fill="#18233a">整理资料</text>
+  <text x="90" y="217" font-size="13" font-weight="500" fill="#18233a">阅读 30 分钟</text>
+  <text x="312" y="217" font-size="11" font-weight="700" fill="#e8821a" text-anchor="end">🔥7</text>
   <rect x="58" y="230" width="264" height="26" rx="9" fill="#ffffff" opacity="0.5"/>
   <circle cx="74" cy="243" r="7" fill="none" stroke="#5d6b85" stroke-width="2"/>
-  <text x="90" y="247" font-size="13" font-weight="500" fill="#18233a">检查待办清单</text>
+  <text x="90" y="247" font-size="13" font-weight="500" fill="#18233a">整理收件箱</text>
+  <text x="312" y="247" font-size="11" font-weight="700" fill="#e8821a" text-anchor="end">🔥3</text>
 
-  <!-- 待办列表 -->
+  <!-- 待办列表（含时间徽标） -->
   <rect x="48" y="276" width="284" height="40" rx="16" fill="#ffffff" opacity="0.42"/>
-  <circle cx="68" cy="300" r="9" fill="none" stroke="#5d6b85" stroke-width="2"/>
-  <text x="86" y="305" font-size="14" font-weight="500" fill="#18233a">10:00 日程确认</text>
+  <circle cx="68" cy="296" r="9" fill="none" stroke="#5d6b85" stroke-width="2"/>
+  <text x="86" y="301" font-size="14" font-weight="500" fill="#18233a">项目周会</text>
+  <rect x="158" y="289" width="50" height="17" rx="8" fill="#1573ff" opacity="0.14"/>
+  <text x="183" y="301" font-size="11" font-weight="600" fill="#1573ff" text-anchor="middle">15:00</text>
 
-  <rect x="48" y="332" width="284" height="40" rx="16" fill="#ffffff" opacity="0.42"/>
-  <circle cx="68" cy="352" r="9" fill="none" stroke="#5d6b85" stroke-width="2"/>
-  <text x="86" y="357" font-size="14" font-weight="500" fill="#18233a">整理收件箱</text>
+  <rect x="48" y="324" width="284" height="40" rx="16" fill="#ffffff" opacity="0.42"/>
+  <circle cx="68" cy="344" r="9" fill="none" stroke="#5d6b85" stroke-width="2"/>
+  <text x="86" y="349" font-size="14" font-weight="500" fill="#18233a">回复邮件</text>
 
-  <rect x="48" y="380" width="284" height="40" rx="16" fill="#ffffff" opacity="0.28"/>
-  <circle cx="68" cy="400" r="9" fill="#29ab56"/>
-  <path d="M64 400 l3 3 l5 -6" fill="none" stroke="#fff" stroke-width="2"/>
-  <text x="86" y="405" font-size="14" font-weight="500" fill="#5d6b85" text-decoration="line-through">归档笔记</text>
+  <rect x="48" y="372" width="284" height="40" rx="16" fill="#ffffff" opacity="0.28"/>
+  <circle cx="68" cy="392" r="9" fill="#29ab56"/>
+  <path d="M64 392 l3 3 l5 -6" fill="none" stroke="#fff" stroke-width="2"/>
+  <text x="86" y="397" font-size="14" font-weight="500" fill="#5d6b85" text-decoration="line-through">整理资料</text>
 
-  <!-- 清除已完成 -->
-  <text x="332" y="442" font-size="12" fill="#5d6b85" text-anchor="end">🗑 清除已完成（1）</text>
+  <text x="332" y="436" font-size="12" fill="#5d6b85" text-anchor="end">🗑 清除已完成（1）</text>
 
-  <!-- 输入框 -->
-  <rect x="48" y="454" width="284" height="44" rx="16" fill="#ffffff" opacity="0.5" stroke="#ffffff" stroke-opacity="0.6"/>
-  <text x="62" y="481" font-size="13" fill="#1573ff">＋</text>
-  <text x="80" y="481" font-size="14" fill="#5d6b85">添加今天待办</text>
-  <circle cx="314" cy="476" r="13" fill="#1573ff"/>
-  <path d="M314 470 l0 12 M309 475 l5 -5 l5 5" stroke="#fff" stroke-width="2" fill="none"/>
+  <!-- 输入框（自然语言提示） -->
+  <rect x="48" y="450" width="284" height="44" rx="16" fill="#ffffff" opacity="0.5" stroke="#ffffff" stroke-opacity="0.6"/>
+  <text x="62" y="477" font-size="13" fill="#1573ff">＋</text>
+  <text x="80" y="477" font-size="13" fill="#8794a8">明天 15:00 提交方案…</text>
+  <circle cx="314" cy="472" r="13" fill="#1573ff"/>
+  <path d="M314 466 l0 12 M309 471 l5 -5 l5 5" stroke="#fff" stroke-width="2" fill="none"/>
 
   <!-- 备忘录 -->
-  <rect x="48" y="510" width="284" height="46" rx="16" fill="#ffffff" opacity="0.5"/>
-  <rect x="60" y="521" width="24" height="24" rx="8" fill="#1573ff" opacity="0.14"/>
-  <text x="72" y="537" font-size="13" fill="#1573ff" text-anchor="middle">▤</text>
-  <text x="94" y="538" font-size="13" font-weight="600" fill="#18233a">全局备忘录</text>
-  <text x="318" y="538" font-size="12" fill="#5d6b85" text-anchor="end">⌄</text>
+  <rect x="48" y="506" width="284" height="46" rx="16" fill="#ffffff" opacity="0.5"/>
+  <rect x="60" y="517" width="24" height="24" rx="8" fill="#1573ff" opacity="0.14"/>
+  <text x="72" y="533" font-size="13" fill="#1573ff" text-anchor="middle">▤</text>
+  <text x="94" y="534" font-size="13" font-weight="600" fill="#18233a">全局备忘录</text>
+  <text x="318" y="534" font-size="12" fill="#5d6b85" text-anchor="end">⌄</text>
 </svg>

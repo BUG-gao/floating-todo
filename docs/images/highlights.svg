@@ -1,0 +1,69 @@
+<svg width="1100" height="300" viewBox="0 0 1100 300" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, 'PingFang SC', 'Segoe UI', sans-serif">
+  <defs>
+    <linearGradient id="cardg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f1f6ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="1100" height="300" fill="none"/>
+
+  <!-- 卡片 1：全局快捷键 -->
+  <g>
+    <rect x="20" y="20" width="340" height="260" rx="22" fill="url(#cardg)" stroke="#dce6f5"/>
+    <circle cx="68" cy="78" r="26" fill="#1573ff" opacity="0.12"/>
+    <text x="68" y="86" font-size="26" text-anchor="middle">⌨️</text>
+    <text x="110" y="74" font-size="20" font-weight="700" fill="#18233a">全局快捷键秒记</text>
+    <text x="110" y="98" font-size="13" fill="#5d6b85">任意 App 里按一下，立刻记一笔</text>
+
+    <rect x="48" y="126" width="284" height="44" rx="12" fill="#0a1a3a" opacity="0.05"/>
+    <rect x="60" y="138" width="120" height="20" rx="6" fill="#ffffff" stroke="#cdd8ea"/>
+    <text x="120" y="153" font-size="13" font-weight="600" fill="#1573ff" text-anchor="middle">⌘ ⇧ Space</text>
+    <text x="196" y="153" font-size="13" fill="#5d6b85">/ Ctrl ⇧ Space</text>
+
+    <rect x="48" y="186" width="284" height="40" rx="12" fill="#1573ff" opacity="0.08"/>
+    <text x="64" y="211" font-size="14" fill="#18233a">输入框自动聚焦 → 打字 → 回车</text>
+    <text x="64" y="252" font-size="12" fill="#8794a8">不打断手头工作，零切换</text>
+  </g>
+
+  <!-- 卡片 2：自然语言 + 提醒 -->
+  <g>
+    <rect x="380" y="20" width="340" height="260" rx="22" fill="url(#cardg)" stroke="#dce6f5"/>
+    <circle cx="428" cy="78" r="26" fill="#29ab56" opacity="0.14"/>
+    <text x="428" y="86" font-size="26" text-anchor="middle">⏰</text>
+    <text x="470" y="74" font-size="20" font-weight="700" fill="#18233a">说人话，自动排期</text>
+    <text x="470" y="98" font-size="13" fill="#5d6b85">识别日期与时间，到点系统提醒</text>
+
+    <rect x="408" y="126" width="284" height="36" rx="10" fill="#ffffff" stroke="#cdd8ea"/>
+    <text x="424" y="149" font-size="13" fill="#18233a">明天 15:00 提交方案</text>
+
+    <text x="540" y="186" font-size="16" fill="#1573ff" text-anchor="middle">↓</text>
+
+    <rect x="408" y="196" width="284" height="44" rx="12" fill="#1573ff" opacity="0.08"/>
+    <text x="424" y="214" font-size="13" font-weight="600" fill="#18233a">📅 明天　·　提交方案</text>
+    <rect x="600" y="206" width="50" height="18" rx="8" fill="#1573ff" opacity="0.16"/>
+    <text x="625" y="219" font-size="11" font-weight="600" fill="#1573ff" text-anchor="middle">15:00</text>
+    <text x="424" y="234" font-size="11" fill="#8794a8">到点弹出系统通知提醒你</text>
+  </g>
+
+  <!-- 卡片 3：每天打卡 streak -->
+  <g>
+    <rect x="740" y="20" width="340" height="260" rx="22" fill="url(#cardg)" stroke="#dce6f5"/>
+    <circle cx="788" cy="78" r="26" fill="#e8821a" opacity="0.14"/>
+    <text x="788" y="86" font-size="26" text-anchor="middle">🔥</text>
+    <text x="830" y="74" font-size="20" font-weight="700" fill="#18233a">每天打卡，连续坚持</text>
+    <text x="830" y="98" font-size="13" fill="#5d6b85">常驻待办 + 习惯连胜，越做越有劲</text>
+
+    <rect x="768" y="126" width="284" height="36" rx="10" fill="#ffffff" stroke="#cdd8ea"/>
+    <circle cx="788" cy="144" r="8" fill="none" stroke="#5d6b85" stroke-width="2"/>
+    <text x="804" y="149" font-size="14" fill="#18233a">阅读 30 分钟</text>
+    <text x="1036" y="149" font-size="13" font-weight="700" fill="#e8821a" text-anchor="end">🔥 7</text>
+
+    <rect x="768" y="170" width="284" height="36" rx="10" fill="#ffffff" stroke="#cdd8ea"/>
+    <circle cx="788" cy="188" r="8" fill="#29ab56"/>
+    <path d="M784 188 l3 3 l5 -6" fill="none" stroke="#fff" stroke-width="2"/>
+    <text x="804" y="193" font-size="14" fill="#5d6b85" text-decoration="line-through">运动打卡</text>
+    <text x="1036" y="193" font-size="13" font-weight="700" fill="#e8821a" text-anchor="end">🔥 12</text>
+
+    <text x="768" y="236" font-size="12" fill="#8794a8">跨天自动重置 · 完成时撒花鼓励 🎉</text>
+  </g>
+</svg>
