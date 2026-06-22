@@ -32,11 +32,12 @@
 
 ## Verification Status
 - Tests/builds run: 2026-06-22 text search after authorization-file removal; remaining matching terms are third-party dependency metadata in `package-lock.json`.
+- Documentation checks run: 2026-06-22 README update instructions reviewed with `sed`; whitespace checked with `git diff --check`.
 - Deployment checks: Not run.
 - Known passing flows: Not verified in this session.
 
 ## Known Risks and Constraints
-- Technical risks: macOS/Windows builds are unsigned, so first launch may be blocked by platform security prompts.
+- Technical risks: macOS/Windows builds are unsigned, so first launch and downloaded macOS updates may be blocked by platform security prompts.
 - Product/legal/platform boundaries: Project-level authorization file and README authorization claim were removed on 2026-06-22. Third-party dependency terms in lockfiles must still be honored.
 - Operational notes: No project-level replacement terms are currently documented.
 
@@ -46,4 +47,5 @@
 - P2: Continue roadmap items from README as capacity allows.
 
 ## Change Log
+- 2026-06-22: Added README troubleshooting steps for macOS users who overwrite-install an updated app and still see "damaged" with no Security & Privacy bypass record.
 - 2026-06-22: Removed project-level authorization file and README badge/section; verified no project-level authorization references remain outside third-party dependency metadata.
