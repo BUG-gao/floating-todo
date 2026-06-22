@@ -12,7 +12,6 @@
 
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-2767c8)](#-下载安装)
 [![Tauri](https://img.shields.io/badge/built%20with-Tauri%202-ffc131?logo=tauri&logoColor=white)](https://tauri.app)
-[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Release](https://img.shields.io/badge/release-v0.3.1-success)](../../releases)
 [![Stars](https://img.shields.io/github/stars/BUG-gao/floating-todo?style=social)](../../stargazers)
 
@@ -148,12 +147,6 @@ floating-todo/
 - [ ] 更丰富的自然语言解析（每周重复、相对日期等）
 
 欢迎提 Issue 和 PR！如果你喜欢这个项目，别忘了点 ⭐ Star。
-
-## 📄 License
-
-[MIT](LICENSE) © gaopengfei
-
----
 
 <div align="center">
 
