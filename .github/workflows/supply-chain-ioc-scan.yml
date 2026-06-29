@@ -1,0 +1,32 @@
+name: Supply-Chain IOC Scan
+
+on:
+  schedule:
+    - cron: "23 2 * * *"
+  workflow_dispatch:
+    inputs:
+      feed_url:
+        description: Optional immutable test-feed URL
+        required: false
+        default: "https://raw.githubusercontent.com/BUG-gao/supply-chain-intel-platform/v0.1.0/tests/fixtures/empty-feed.json"
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: ioc-scan
+        uses: BUG-gao/supply-chain-intel-platform@v0.1.0
+        with:
+          feed-url: ${{ inputs.feed_url }}
+          fail-on-severity: high
+          sarif-path: supply-chain-ioc.sarif
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: supply-chain-ioc.sarif
