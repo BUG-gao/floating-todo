@@ -2,6 +2,7 @@
 
 const TAURI = window.__TAURI__;
 const appWindow = TAURI?.window?.getCurrentWindow?.();
+const isWindows = /Windows/i.test(navigator.userAgent);
 
 async function openExternal(url) {
   try {
@@ -93,6 +94,7 @@ function defaultState() {
     recurringItems: [],
     settings: {
       alwaysOnTop: true,
+      showOnDesktop: false,
       opacity: 0.78,
       appearance: "system",
       customBg: null,
@@ -123,6 +125,7 @@ function load() {
     recurringItems: s.recurringItems || [],
     lastActiveDate: s.lastActiveDate || todayStr(),
   };
+  if (isWindows && state.settings.showOnDesktop) state.settings.alwaysOnTop = false;
   return state;
 }
 
@@ -337,6 +340,48 @@ const ICONS = {
 const app = document.getElementById("app");
 let compact = false;
 let activeMenu = null; // { id, day, kind }
+let appliedWindowMode = null;
+let pendingWindowMode = null;
+let windowModeTask = Promise.resolve();
+
+function applyWindowMode() {
+  if (!appWindow) return;
+
+  const requestedMode =
+    isWindows && state.settings.showOnDesktop
+      ? "desktop"
+      : state.settings.alwaysOnTop
+        ? "topmost"
+        : "normal";
+  if (appliedWindowMode === requestedMode || pendingWindowMode === requestedMode) return;
+
+  pendingWindowMode = requestedMode;
+  windowModeTask = windowModeTask
+    .then(async () => {
+      if (pendingWindowMode !== requestedMode) return;
+
+      if (requestedMode === "desktop") {
+        await appWindow.setAlwaysOnTop(false);
+        await TAURI.core.invoke("set_desktop_mode", { enabled: true });
+      } else {
+        if (isWindows) await TAURI.core.invoke("set_desktop_mode", { enabled: false });
+        await appWindow.setAlwaysOnTop(requestedMode === "topmost");
+      }
+
+      appliedWindowMode = requestedMode;
+      if (pendingWindowMode === requestedMode) pendingWindowMode = null;
+    })
+    .catch((error) => {
+      console.error("Failed to update window mode", error);
+      if (pendingWindowMode === requestedMode) pendingWindowMode = null;
+      appliedWindowMode = null;
+      if (requestedMode === "desktop" && state.settings.showOnDesktop) {
+        state.settings.showOnDesktop = false;
+        save();
+        render();
+      }
+    });
+}
 
 function applyWindowChrome() {
   const root = document.documentElement;
@@ -350,9 +395,9 @@ function applyWindowChrome() {
     root.style.removeProperty("--panel-bottom");
   }
   if (appWindow) {
-    appWindow.setAlwaysOnTop(!!state.settings.alwaysOnTop).catch(() => {});
     appWindow.setIgnoreCursorEvents(!!state.settings.clickThrough).catch(() => {});
   }
+  applyWindowMode();
 }
 
 function rowHtml(it, day, kind) {
@@ -714,6 +759,7 @@ function openSettings() {
   overlay.innerHTML = `<div class="settings">
     <h2>小组件设置</h2>
     <div class="set-row"><span>始终置顶</span><div class="switch ${s.alwaysOnTop ? "on" : ""}" data-s="alwaysOnTop"></div></div>
+    ${isWindows ? `<div class="set-row"><span>固定在桌面（Win+D 后仍显示）</span><div class="switch ${s.showOnDesktop ? "on" : ""}" data-s="showOnDesktop"></div></div>` : ""}
     <div class="set-row"><span>鼠标穿透（点击落到下层）</span><div class="switch ${s.clickThrough ? "on" : ""}" data-s="clickThrough"></div></div>
     <div class="set-row"><span>开机自启动</span><div class="switch" id="autostart-sw" data-s="autostart"></div></div>
     <div class="set-row"><span>开启备忘录</span><div class="switch ${s.memoEnabled ? "on" : ""}" data-s="memoEnabled"></div></div>
@@ -753,7 +799,18 @@ function openSettings() {
     const sw = e.target.closest("[data-s]");
     if (sw) {
       const key = sw.dataset.s;
-      if (key === "alwaysOnTop") { state.settings.alwaysOnTop = !state.settings.alwaysOnTop; sw.classList.toggle("on"); }
+      if (key === "alwaysOnTop") {
+        state.settings.alwaysOnTop = !state.settings.alwaysOnTop;
+        if (state.settings.alwaysOnTop) state.settings.showOnDesktop = false;
+        sw.classList.toggle("on", state.settings.alwaysOnTop);
+        overlay.querySelector('[data-s="showOnDesktop"]')?.classList.toggle("on", state.settings.showOnDesktop);
+      }
+      else if (key === "showOnDesktop") {
+        state.settings.showOnDesktop = !state.settings.showOnDesktop;
+        if (state.settings.showOnDesktop) state.settings.alwaysOnTop = false;
+        sw.classList.toggle("on", state.settings.showOnDesktop);
+        overlay.querySelector('[data-s="alwaysOnTop"]')?.classList.toggle("on", state.settings.alwaysOnTop);
+      }
       else if (key === "memoEnabled") {
         state.settings.memoEnabled = !state.settings.memoEnabled;
         if (state.settings.memoEnabled) state.memo.expanded = true;
@@ -830,6 +887,7 @@ async function importBackup(overlay) {
       memo: { ...base.memo, ...(parsed.memo || {}) },
       recurringItems: parsed.recurringItems || [],
     };
+    if (isWindows && state.settings.showOnDesktop) state.settings.alwaysOnTop = false;
     save();
     overlay?.remove();
     applyWindowChrome();
@@ -950,6 +1008,14 @@ TAURI?.event?.listen?.("toggle-passthrough", () => {
   state.settings.clickThrough = !state.settings.clickThrough;
   save();
   applyWindowChrome();
+});
+
+TAURI?.event?.listen?.("toggle-desktop-mode", () => {
+  if (!isWindows) return;
+  state.settings.showOnDesktop = !state.settings.showOnDesktop;
+  if (state.settings.showOnDesktop) state.settings.alwaysOnTop = false;
+  save();
+  render();
 });
 
 /* ---------------- 启动 ---------------- */

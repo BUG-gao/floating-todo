@@ -5,6 +5,9 @@ use tauri::{
 };
 use tauri_plugin_dialog::DialogExt;
 
+#[cfg(target_os = "windows")]
+mod windows_desktop;
+
 /// 显示或隐藏悬浮窗。
 fn toggle_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
@@ -54,6 +57,25 @@ async fn import_data(app: AppHandle) -> Result<Option<String>, String> {
     }
 }
 
+/// 将窗口放入 Windows 桌面层，使其在 Win+D 显示桌面后仍然可见。
+#[tauri::command]
+fn set_desktop_mode(app: AppHandle, enabled: bool) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        let window = app
+            .get_webview_window("main")
+            .ok_or_else(|| "main window not found".to_string())?;
+        let hwnd = window.hwnd().map_err(|error| error.to_string())?;
+        windows_desktop::set_desktop_mode(hwnd, enabled)
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (app, enabled);
+        Ok(())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default()
@@ -72,7 +94,11 @@ pub fn run() {
     }
 
     builder
-        .invoke_handler(tauri::generate_handler![export_data, import_data])
+        .invoke_handler(tauri::generate_handler![
+            export_data,
+            import_data,
+            set_desktop_mode
+        ])
         .setup(|app| {
             // macOS：作为状态栏小组件运行，不占用程序坞。
             #[cfg(target_os = "macos")]
@@ -104,9 +130,18 @@ pub fn run() {
 
             let toggle_item =
                 MenuItem::with_id(app, "toggle", "显示/隐藏小组件", true, None::<&str>)?;
+            #[cfg(target_os = "windows")]
+            let desktop_item =
+                MenuItem::with_id(app, "desktop", "切换固定在桌面", true, None::<&str>)?;
             let passthrough_item =
                 MenuItem::with_id(app, "passthrough", "切换鼠标穿透", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+            #[cfg(target_os = "windows")]
+            let menu = Menu::with_items(
+                app,
+                &[&toggle_item, &desktop_item, &passthrough_item, &quit_item],
+            )?;
+            #[cfg(not(target_os = "windows"))]
             let menu = Menu::with_items(app, &[&toggle_item, &passthrough_item, &quit_item])?;
 
             let _tray = TrayIconBuilder::new()
@@ -120,6 +155,12 @@ pub fn run() {
                         if let Some(win) = app.get_webview_window("main") {
                             let _ = win.show();
                             let _ = win.emit("toggle-passthrough", ());
+                        }
+                    }
+                    "desktop" => {
+                        if let Some(win) = app.get_webview_window("main") {
+                            let _ = win.show();
+                            let _ = win.emit("toggle-desktop-mode", ());
                         }
                     }
                     "quit" => app.exit(0),
