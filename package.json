@@ -4,6 +4,7 @@
   "version": "0.3.1",
   "type": "module",
   "scripts": {
+    "test": "node --test",
     "tauri": "tauri",
     "dev": "tauri dev",
     "build": "tauri build"

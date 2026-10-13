@@ -18,6 +18,8 @@
   --green: #29ab56;
   --shadow: rgba(20, 40, 80, 0.18);
   --opacity: 0.78;
+  --panel-inset: 12px;
+  --panel-radius: 26px;
 }
 
 html[data-theme="dark"] {
@@ -78,8 +80,26 @@ body {
 
 .panel {
   position: absolute;
-  inset: 6px;
-  border-radius: 26px;
+  inset: var(--panel-inset);
+  border-radius: var(--panel-radius);
+  isolation: isolate;
+  border: 1px solid rgba(var(--border), var(--border-alpha));
+  /* The entire rounded shadow fits inside the transparent window gutter. */
+  box-shadow: 0 2px 6px var(--shadow);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: inherit;
+  /* Clip the filtered surface without clipping the panel's outer shadow. */
+  clip-path: inset(0 round var(--panel-radius));
   background: linear-gradient(
     145deg,
     rgba(var(--panel-top), var(--opacity)),
@@ -87,11 +107,10 @@ body {
   );
   -webkit-backdrop-filter: blur(26px) saturate(1.4);
   backdrop-filter: blur(26px) saturate(1.4);
-  border: 1px solid rgba(var(--border), var(--border-alpha));
-  box-shadow: 0 18px 48px var(--shadow);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
+}
+
+html[data-shadow="off"] .panel {
+  box-shadow: none;
 }
 
 #app {
@@ -232,6 +251,7 @@ button {
 
 .row {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 10px;
   padding: 9px 10px;
@@ -307,6 +327,43 @@ button {
 .row:hover .actions {
   opacity: 1;
 }
+
+.drag-handle {
+  flex-shrink: 0;
+  width: 18px;
+  min-height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  opacity: 0.45;
+  cursor: grab;
+  touch-action: none;
+}
+.row:hover .drag-handle,
+.drag-handle:focus-visible {
+  opacity: 1;
+  color: var(--accent);
+}
+.drag-handle:focus-visible {
+  outline: 2px solid var(--accent);
+  border-radius: 5px;
+}
+.row .body { touch-action: pan-y; }
+.row.drag-placeholder {
+  opacity: 0.3;
+  outline: 1px dashed var(--accent);
+  outline-offset: -2px;
+}
+.drag-ghost {
+  position: fixed;
+  z-index: 100;
+  pointer-events: none;
+  background: rgb(var(--panel-top));
+  opacity: 0.95;
+  box-shadow: 0 4px 12px var(--shadow);
+}
+.sorting, .sorting * { cursor: grabbing !important; }
 
 /* ---------- 每天常驻区 ---------- */
 .recurring {
@@ -475,7 +532,9 @@ button {
 /* ---------- 设置面板 ---------- */
 .overlay {
   position: absolute;
-  inset: 0;
+  inset: var(--panel-inset);
+  border-radius: var(--panel-radius);
+  overflow: hidden;
   background: rgba(0, 0, 0, 0.12);
   z-index: 50;
   display: flex;
