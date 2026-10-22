@@ -335,6 +335,23 @@ button {
 .recurring .head .spacer {
   flex: 1;
 }
+.compact .recurring .head {
+  padding-right: 28px;
+}
+.recurring-content {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.recurring-content[hidden] {
+  display: none;
+}
+.recurring-toggle svg {
+  transition: transform 0.18s ease;
+}
+.recurring-toggle[aria-expanded="false"] svg {
+  transform: rotate(-90deg);
+}
 .badge {
   flex-shrink: 0;
   font-size: 9px;

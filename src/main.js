@@ -92,6 +92,7 @@ function defaultState() {
     selectedDay: "today",
     itemsByDay: { today: [], tomorrow: [], dayAfterTomorrow: [] },
     recurringItems: [],
+    recurringCollapsed: false,
     settings: {
       alwaysOnTop: true,
       showOnDesktop: false,
@@ -470,14 +471,16 @@ function render() {
       <span class="ic">${ICONS.repeat}</span><span>每天</span><div class="spacer"></div>`;
     if (!compact)
       html += `<button class="icon-btn sm" data-act="raddtoggle" title="添加每天常驻待办">${ICONS.plus}</button>`;
+    html += `<button class="icon-btn sm recurring-toggle" data-act="rcollapse" aria-expanded="${!state.recurringCollapsed}" aria-controls="recurring-content" aria-label="${state.recurringCollapsed ? "展开" : "收起"}每天任务" title="${state.recurringCollapsed ? "展开" : "收起"}每天任务">${ICONS.chevron}</button>`;
     html += `</div>`;
+    html += `<div id="recurring-content" class="recurring-content"${state.recurringCollapsed ? " hidden" : ""}>`;
     state.recurringItems.forEach((it) => (html += rowHtml(it, "today", "recurring")));
     if (!compact && recurringComposerOpen) {
       html += `<div class="composer sm"><span class="ic">${ICONS.repeat}</span>
         <input id="recur-input" placeholder="添加每天常驻待办" value="${esc(recurDraft)}"/>
         <button class="send" data-act="raddsubmit">${ICONS.arrowUp}</button></div>`;
     }
-    html += `</div>`;
+    html += `</div></div>`;
   }
 
   // 列表
@@ -592,7 +595,18 @@ app.addEventListener("click", (e) => {
     case "redit": startRecurEdit(id); break;
     case "submit": commitMain(); break;
     case "canceledit": cancelEdit(); break;
-    case "raddtoggle": recurringComposerOpen = !recurringComposerOpen; focusRecur = recurringComposerOpen; render(); break;
+    case "rcollapse": state.recurringCollapsed = !state.recurringCollapsed; save(); render(); break;
+    case "raddtoggle":
+      if (state.recurringCollapsed) {
+        state.recurringCollapsed = false;
+        recurringComposerOpen = true;
+        save();
+      } else {
+        recurringComposerOpen = !recurringComposerOpen;
+      }
+      focusRecur = recurringComposerOpen;
+      render();
+      break;
     case "raddsubmit": commitRecur(); break;
     case "expand": expandWindow(); break;
     case "settings": openSettings(); break;
