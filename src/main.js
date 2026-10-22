@@ -3,6 +3,7 @@
 const TAURI = window.__TAURI__;
 const appWindow = TAURI?.window?.getCurrentWindow?.();
 const isWindows = /Windows/i.test(navigator.userAgent);
+const isMac = /Mac/i.test(navigator.platform);
 
 async function openExternal(url) {
   try {
@@ -18,6 +19,7 @@ async function openExternal(url) {
 const DAYS = ["today", "tomorrow", "dayAfterTomorrow"];
 const DAY_TITLE = { today: "今天", tomorrow: "明天", dayAfterTomorrow: "后天" };
 const STORAGE_KEY = "floating-todo/snapshot";
+const DEFAULT_QUICK_CAPTURE_SHORTCUT = "CommandOrControl+Shift+Space";
 
 const uid = () =>
   crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random());
@@ -100,6 +102,8 @@ function defaultState() {
       customBg: null,
       memoEnabled: false,
       clickThrough: false,
+      toggleShortcut: null,
+      quickCaptureShortcut: DEFAULT_QUICK_CAPTURE_SHORTCUT,
     },
     memo: { text: "", expanded: false },
     lastActiveDate: todayStr(),
@@ -751,6 +755,87 @@ function openDetailEditor(id, day) {
 
 /* ---------------- 设置面板 ---------------- */
 
+const shortcutErrors = { quickCapture: "", toggle: "" };
+let shortcutTask = Promise.resolve();
+let recordingShortcutInput = null;
+let shortcutRecordingReady = false;
+let shortcutRecordingTask = Promise.resolve();
+
+function setShortcutRecording(input) {
+  recordingShortcutInput = input;
+  shortcutRecordingReady = false;
+  const status = input?.closest(".shortcut-setting")?.querySelector(".shortcut-status");
+  if (status) {
+    status.classList.remove("error");
+    status.textContent = "正在准备录入…";
+  }
+  // 串行切换，避免快速切换输入框时，较晚到达的关闭请求覆盖新的录入状态。
+  shortcutRecordingTask = shortcutRecordingTask.catch(() => {}).then(async () => {
+    if (TAURI?.core?.invoke) {
+      await TAURI.core.invoke("set_shortcut_recording", { recording: !!input });
+    }
+    if (recordingShortcutInput === input) {
+      shortcutRecordingReady = !!input;
+      if (status?.textContent === "正在准备录入…") status.textContent = "请按下组合键，录入后点击保存";
+    }
+  }).catch((error) => {
+    if (input && recordingShortcutInput === input && status) {
+      status.classList.add("error");
+      status.textContent = "无法开始录入：" + String(error.message || error);
+    }
+    console.error("Failed to update shortcut recording mode", error);
+  });
+}
+
+function recordShortcut(input, shortcut) {
+  const value = normalizeShortcut(shortcut);
+  input.dataset.shortcutValue = value || "";
+  input.value = shortcutLabel(value);
+  const status = input.closest(".shortcut-setting").querySelector(".shortcut-status");
+  status.classList.remove("error");
+  status.textContent = "已录入，点击保存生效";
+}
+
+function normalizeShortcut(value) {
+  if (value == null || value === "") return null;
+  if (typeof value !== "string") throw new Error("快捷键格式无效");
+  const tokens = value.trim()
+    .replace(/⌘/g, "Cmd+").replace(/⌃/g, "Ctrl+")
+    .replace(/⌥/g, "Alt+").replace(/⇧/g, "Shift+")
+    .split("+").map((token) => token.trim()).filter(Boolean);
+  return tokens.map((token) => {
+    const key = token.toLowerCase();
+    if (["commandorcontrol", "cmdorctrl", "commandorctrl", "cmdorcontrol"].includes(key)) return "CommandOrControl";
+    if (["cmd", "command"].includes(key)) return "CommandOrControl";
+    if (["ctrl", "control"].includes(key)) return isMac ? "Control" : "CommandOrControl";
+    if (["option", "alt"].includes(key)) return "Alt";
+    if (["win", "windows", "super", "meta"].includes(key)) return "Super";
+    if (key === "shift") return "Shift";
+    return token.length === 1 ? token.toUpperCase() : token;
+  }).join("+") || null;
+}
+
+function shortcutLabel(shortcut) {
+  if (!shortcut) return "";
+  return shortcut.split("+").map((token) => {
+    if (token === "CommandOrControl") return isMac ? "Cmd" : "Ctrl";
+    if (token === "Control") return "Ctrl";
+    if (token === "Super") return isMac ? "Cmd" : "Win";
+    return token.replace(/^Key([A-Z])$/, "$1").replace(/^Digit([0-9])$/, "$1");
+  }).join("+");
+}
+
+function configureShortcut(kind, value) {
+  const shortcut = normalizeShortcut(value);
+  shortcutTask = shortcutTask.catch(() => {}).then(async () => {
+    if (!TAURI?.core?.invoke) throw new Error("请在桌面应用中设置全局快捷键");
+    await TAURI.core.invoke("set_global_shortcut", { kind, shortcut });
+    shortcutErrors[kind] = "";
+    return shortcut;
+  });
+  return shortcutTask;
+}
+
 function openSettings() {
   const overlay = document.createElement("div");
   overlay.className = "overlay";
@@ -763,6 +848,21 @@ function openSettings() {
     <div class="set-row"><span>鼠标穿透（点击落到下层）</span><div class="switch ${s.clickThrough ? "on" : ""}" data-s="clickThrough"></div></div>
     <div class="set-row"><span>开机自启动</span><div class="switch" id="autostart-sw" data-s="autostart"></div></div>
     <div class="set-row"><span>开启备忘录</span><div class="switch ${s.memoEnabled ? "on" : ""}" data-s="memoEnabled"></div></div>
+    <div class="shortcut-settings">
+      <div class="set-row"><span>自定义全局快捷键</span></div>
+      ${["quickCapture", "toggle"].map((kind) => {
+        const quick = kind === "quickCapture";
+        const value = quick ? s.quickCaptureShortcut : s.toggleShortcut;
+        return `<div class="shortcut-setting" data-shortcut-kind="${kind}">
+          <label for="shortcut-${kind}" class="shortcut-label">${quick ? "快速记录" : "显示 / 隐藏悬浮窗"}</label>
+          <div class="composer sm"><input id="shortcut-${kind}" aria-describedby="shortcut-help shortcut-status-${kind}" data-shortcut-value="${esc(value || "")}" value="${esc(shortcutLabel(value))}" placeholder="点击后按下快捷键" readonly autocomplete="off" spellcheck="false"/></div>
+          <div class="set-row"><button class="link-btn" data-shortcut="${quick ? "reset" : "clear"}">${quick ? "恢复默认" : "清除快捷键"}</button>
+            <button class="link-btn shortcut-save" data-shortcut="save">保存</button></div>
+          <div id="shortcut-status-${kind}" class="shortcut-status ${shortcutErrors[kind] ? "error" : ""}" role="status">${esc(shortcutErrors[kind] || (value ? "" : "未设置"))}</div>
+        </div>`;
+      }).join("")}
+      <div id="shortcut-help" class="shortcut-hint">点击输入框，直接按下组合键后点击保存。支持双键组合，如 ${isMac ? "⌘+T" : "Ctrl+T"}，也支持 ${isMac ? "⌘+Shift+T" : "Ctrl+Shift+T"}；至少包含一个修饰键（${isMac ? "Cmd、Ctrl 或 Alt" : "Ctrl、Alt 或 Win"}）和一个主键，Shift 可选。Esc 取消录入，Tab 切换焦点。</div>
+    </div>
     <div>
       <div style="font-size:13px;font-weight:500;margin-bottom:6px">外观</div>
       <div class="seg-control">
@@ -786,13 +886,91 @@ function openSettings() {
       <button class="data-btn" data-s="import">${ICONS.upload}<span>导入备份</span></button>
     </div>
     <div style="font-size:11px;color:var(--text-secondary);line-height:1.6">
-      💡 全局快捷键 <b>${navigator.platform.includes("Mac") ? "⌘⇧Space" : "Ctrl+Shift+Space"}</b> 可在任意应用中唤起并聚焦输入框，快速记一笔。<br>
+      💡 快速记录可在任意应用中唤起并聚焦输入框；显示 / 隐藏快捷键可切换悬浮窗可见状态。<br>
       ⏰ 输入「明天 15:00 开会」会自动识别日期与提醒时间。<br>
       🖱️ 开启鼠标穿透后浮窗不再挡点击，可从<b>托盘菜单「切换鼠标穿透」</b>关回来。
     </div>
     <div class="set-row" style="justify-content:flex-end"><button class="link-btn" data-s="close">完成</button></div>
   </div>`;
   document.body.appendChild(overlay);
+
+  // 移除聚焦的元素不一定触发 blur，确保所有关闭设置的入口都结束原生录入模式。
+  const recordingObserver = new MutationObserver(() => {
+    if (!overlay.isConnected) {
+      if (recordingShortcutInput && overlay.contains(recordingShortcutInput)) setShortcutRecording(null);
+      recordingObserver.disconnect();
+    }
+  });
+  recordingObserver.observe(document.body, { childList: true });
+
+  const saveShortcut = async (group, action) => {
+    const kind = group.dataset.shortcutKind;
+    const input = group.querySelector("input");
+    const status = group.querySelector(".shortcut-status");
+    input.blur();
+    const controls = overlay.querySelectorAll(".shortcut-settings input, .shortcut-settings button");
+    controls.forEach((control) => { control.disabled = true; });
+    status.classList.remove("error");
+    status.textContent = "正在保存…";
+    try {
+      const value = action === "clear" ? null : action === "reset" ? DEFAULT_QUICK_CAPTURE_SHORTCUT : input.dataset.shortcutValue;
+      const shortcut = await configureShortcut(kind, value);
+      state.settings[kind === "quickCapture" ? "quickCaptureShortcut" : "toggleShortcut"] = shortcut;
+      save();
+      input.dataset.shortcutValue = shortcut || "";
+      input.value = shortcutLabel(shortcut);
+      status.textContent = shortcut ? "已保存并生效" : "已清除";
+    } catch (error) {
+      status.classList.add("error");
+      status.textContent = "未保存：" + String(error.message || error);
+    } finally {
+      controls.forEach((control) => { control.disabled = false; });
+    }
+  };
+  overlay.querySelectorAll(".shortcut-setting").forEach((group) => {
+    group.addEventListener("click", (e) => {
+      const button = e.target.closest("[data-shortcut]");
+      if (button) saveShortcut(group, button.dataset.shortcut);
+    });
+    const input = group.querySelector("input");
+    const status = group.querySelector(".shortcut-status");
+    input.addEventListener("focus", () => setShortcutRecording(input));
+    input.addEventListener("blur", () => {
+      if (recordingShortcutInput === input) setShortcutRecording(null);
+    });
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Tab" && !e.ctrlKey && !e.altKey && !e.metaKey) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.repeat || e.isComposing || !shortcutRecordingReady) return;
+      if (e.key === "Escape" && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
+        const key = group.dataset.shortcutKind === "quickCapture" ? "quickCaptureShortcut" : "toggleShortcut";
+        input.dataset.shortcutValue = state.settings[key] || "";
+        input.value = shortcutLabel(state.settings[key]);
+        status.classList.remove("error");
+        status.textContent = "已取消录入，保留原快捷键";
+        input.blur();
+        return;
+      }
+      if (["Control", "Shift", "Alt", "Meta", "AltGraph", "Fn"].includes(e.key)) return;
+      if (!e.ctrlKey && !e.altKey && !e.metaKey) {
+        status.classList.add("error");
+        status.textContent = "请同时按下 " + (isMac ? "Cmd、Ctrl 或 Alt" : "Ctrl、Alt 或 Win");
+        return;
+      }
+      if (!e.code || e.code === "Unidentified" || e.getModifierState("AltGraph")) {
+        status.classList.add("error");
+        status.textContent = "无法识别该组合，请尝试其他快捷键";
+        return;
+      }
+      const modifiers = [];
+      if (e.metaKey) modifiers.push(isMac ? "CommandOrControl" : "Super");
+      if (e.ctrlKey) modifiers.push(isMac ? "Control" : "CommandOrControl");
+      if (e.altKey) modifiers.push("Alt");
+      if (e.shiftKey) modifiers.push("Shift");
+      recordShortcut(input, [...modifiers, e.code].join("+"));
+    });
+  });
 
   overlay.addEventListener("click", (e) => {
     if (e.target === overlay) { overlay.remove(); return; }
@@ -879,11 +1057,51 @@ async function importBackup(overlay) {
     const parsed = JSON.parse(content);
     if (!parsed || !parsed.itemsByDay) return;
     const base = defaultState();
+    const importedSettings = { ...base.settings, ...(parsed.settings || {}) };
+    let shortcutSettings;
+    let shortcutImportError = "";
+    // 导入可能交换两个功能的组合，先释放切换快捷键，再整体应用；失败则恢复原组合。
+    shortcutTask = shortcutTask.catch(() => {}).then(async () => {
+      const previous = {
+        quickCaptureShortcut: state.settings.quickCaptureShortcut,
+        toggleShortcut: state.settings.toggleShortcut,
+      };
+      const next = {
+        quickCaptureShortcut: normalizeShortcut(importedSettings.quickCaptureShortcut),
+        toggleShortcut: normalizeShortcut(importedSettings.toggleShortcut),
+      };
+      try {
+        await TAURI.core.invoke("set_global_shortcut", { kind: "toggle", shortcut: null });
+        await TAURI.core.invoke("set_global_shortcut", { kind: "quickCapture", shortcut: next.quickCaptureShortcut });
+        await TAURI.core.invoke("set_global_shortcut", { kind: "toggle", shortcut: next.toggleShortcut });
+        shortcutErrors.quickCapture = "";
+        shortcutErrors.toggle = "";
+        return next;
+      } catch (error) {
+        try {
+          await TAURI.core.invoke("set_global_shortcut", { kind: "toggle", shortcut: null });
+          await TAURI.core.invoke("set_global_shortcut", { kind: "quickCapture", shortcut: previous.quickCaptureShortcut });
+          await TAURI.core.invoke("set_global_shortcut", { kind: "toggle", shortcut: previous.toggleShortcut });
+        } catch (restoreError) {
+          shortcutErrors.quickCapture = shortcutErrors.toggle = "恢复快捷键失败，请在设置中重新保存。" + String(restoreError);
+        }
+        throw error;
+      }
+    });
+    try {
+      shortcutSettings = await shortcutTask;
+    } catch (error) {
+      shortcutSettings = {
+        quickCaptureShortcut: state.settings.quickCaptureShortcut,
+        toggleShortcut: state.settings.toggleShortcut,
+      };
+      shortcutImportError = String(error.message || error);
+    }
     state = {
       ...base,
       ...parsed,
       itemsByDay: { ...base.itemsByDay, ...(parsed.itemsByDay || {}) },
-      settings: { ...base.settings, ...(parsed.settings || {}) },
+      settings: { ...importedSettings, ...shortcutSettings },
       memo: { ...base.memo, ...(parsed.memo || {}) },
       recurringItems: parsed.recurringItems || [],
     };
@@ -892,6 +1110,7 @@ async function importBackup(overlay) {
     overlay?.remove();
     applyWindowChrome();
     render();
+    if (shortcutImportError) window.alert("待办数据已导入，快捷键未导入：" + shortcutImportError);
   } catch (e) {}
 }
 
@@ -991,6 +1210,19 @@ window.addEventListener("resize", updateCompact);
 
 /* ---------------- 全局快捷键：快速捕获 ---------------- */
 
+TAURI?.event?.listen?.("shortcut-recorded", ({ payload }) => {
+  const input = recordingShortcutInput;
+  if (input && document.activeElement === input && document.hasFocus()) recordShortcut(input, payload);
+});
+
+window.addEventListener("blur", () => {
+  if (recordingShortcutInput) setShortcutRecording(null);
+});
+window.addEventListener("focus", () => {
+  const input = document.activeElement;
+  if (input?.matches(".shortcut-setting input") && !input.disabled) setShortcutRecording(input);
+});
+
 TAURI?.event?.listen?.("quick-capture", () => {
   closeMenu();
   document.querySelector(".overlay")?.remove();
@@ -1019,6 +1251,25 @@ TAURI?.event?.listen?.("toggle-desktop-mode", () => {
 });
 
 /* ---------------- 启动 ---------------- */
+
+// WebView 重新加载后清除上一页面可能遗留的录入状态。
+setShortcutRecording(null);
+
+// 本地旧数据会自动使用默认快速记录组合，新增的显示 / 隐藏快捷键默认不占用按键。
+for (const [kind, key] of [["quickCapture", "quickCaptureShortcut"], ["toggle", "toggleShortcut"]]) {
+  configureShortcut(kind, state.settings[key]).then((shortcut) => {
+    state.settings[key] = shortcut;
+    save();
+  }).catch((error) => {
+    shortcutErrors[kind] = "快捷键未生效：" + String(error.message || error);
+    console.error(shortcutErrors[kind]);
+    const status = document.getElementById(`shortcut-status-${kind}`);
+    if (status) {
+      status.classList.add("error");
+      status.textContent = shortcutErrors[kind];
+    }
+  });
+}
 
 updateCompact();
 render();

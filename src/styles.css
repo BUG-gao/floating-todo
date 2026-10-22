@@ -578,6 +578,47 @@ input[type="color"] {
   color: var(--accent);
 }
 
+.shortcut-settings, .shortcut-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.shortcut-settings {
+  gap: 10px;
+}
+.shortcut-label, .shortcut-hint, .shortcut-status {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.shortcut-setting .composer input {
+  min-width: 0;
+  width: 100%;
+  font-size: 12px;
+  caret-color: transparent;
+}
+.shortcut-setting .composer:focus-within {
+  border-color: var(--accent);
+}
+.shortcut-setting input[readonly]:not(:disabled) {
+  cursor: pointer;
+}
+.shortcut-save {
+  color: var(--accent);
+  font-weight: 600;
+}
+.shortcut-status:empty {
+  display: none;
+}
+.shortcut-status.error {
+  color: #e5484d;
+}
+.shortcut-settings :disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
 /* ---------- 浮层菜单 ---------- */
 .menu {
   position: absolute;
