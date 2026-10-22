@@ -15,8 +15,7 @@ async function openExternal(url) {
 
 /* ---------------- 数据模型 ---------------- */
 
-const DAYS = ["today", "tomorrow", "dayAfterTomorrow"];
-const DAY_TITLE = { today: "今天", tomorrow: "明天", dayAfterTomorrow: "后天" };
+const LEGACY_DAY_OFFSETS = { today: 0, tomorrow: 1, dayAfterTomorrow: 2 };
 const STORAGE_KEY = "floating-todo/snapshot";
 
 const uid = () =>
@@ -24,7 +23,22 @@ const uid = () =>
 
 function todayStr(d = new Date()) {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  return `${x.getFullYear()}-${x.getMonth() + 1}-${x.getDate()}`;
+  return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`;
+}
+
+function normalizeDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{1,2}-\d{1,2}$/.test(value)) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+  return todayStr(date);
+}
+
+function shiftDate(value, offset) {
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + offset);
+  return todayStr(date);
 }
 
 function dayDelta(fromStr, toStr) {
@@ -35,10 +49,18 @@ function dayDelta(fromStr, toStr) {
   return Math.round((b - a) / 86400000);
 }
 
-function dateLabel(offset) {
-  const d = new Date();
-  d.setDate(d.getDate() + offset);
-  return `${d.getMonth() + 1}月${d.getDate()}日`;
+function dateLabel(value, includeYear = true) {
+  const [year, month, day] = value.split("-").map(Number);
+  const prefix = !includeYear || year === new Date().getFullYear() ? "" : `${year}年`;
+  return `${prefix}${month}月${day}日`;
+}
+
+function dayTitle(value) {
+  const offset = dayDelta(todayStr(), value);
+  const relative = { "-2": "前天", "-1": "昨天", 0: "今天", 1: "明天", 2: "后天" };
+  if (relative[offset]) return relative[offset];
+  const [year, month, day] = value.split("-").map(Number);
+  return "周" + "日一二三四五六"[new Date(year, month - 1, day).getDay()];
 }
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -77,9 +99,9 @@ function parseTime(s) {
 function parseQuickInput(text, defaultDay) {
   let title = text.trim();
   let day = defaultDay;
-  if (/^(今天|今日)/.test(title)) { day = "today"; title = title.replace(/^(今天|今日)\s*/, ""); }
-  else if (/^明天/.test(title)) { day = "tomorrow"; title = title.replace(/^明天\s*/, ""); }
-  else if (/^后天/.test(title)) { day = "dayAfterTomorrow"; title = title.replace(/^后天\s*/, ""); }
+  if (/^(今天|今日)/.test(title)) { day = todayStr(); title = title.replace(/^(今天|今日)\s*/, ""); }
+  else if (/^明天/.test(title)) { day = shiftDate(todayStr(), 1); title = title.replace(/^明天\s*/, ""); }
+  else if (/^后天/.test(title)) { day = shiftDate(todayStr(), 2); title = title.replace(/^后天\s*/, ""); }
 
   let time = null;
   const t = parseTime(title);
@@ -89,8 +111,9 @@ function parseQuickInput(text, defaultDay) {
 
 function defaultState() {
   return {
-    selectedDay: "today",
-    itemsByDay: { today: [], tomorrow: [], dayAfterTomorrow: [] },
+    schemaVersion: 2,
+    selectedDate: todayStr(),
+    itemsByDate: { [todayStr()]: [] },
     recurringItems: [],
     settings: {
       alwaysOnTop: true,
@@ -106,27 +129,57 @@ function defaultState() {
   };
 }
 
-function load() {
-  let s;
-  try {
-    s = JSON.parse(localStorage.getItem(STORAGE_KEY));
-  } catch (e) {
-    s = null;
-  }
+// 本地加载和备份导入使用相同的日期迁移，旧三天分组以其最后活跃日为基准。
+function restoreState(s) {
   const base = defaultState();
   if (!s) return base;
-  // 合并，兼容旧数据缺字段
-  const state = {
+  const referenceDate = normalizeDate(s.lastActiveDate) || todayStr();
+  const itemsByDate = {};
+  if (s.itemsByDate && typeof s.itemsByDate === "object") {
+    for (const [key, entries] of Object.entries(s.itemsByDate)) {
+      const date = normalizeDate(key);
+      if (date && Array.isArray(entries)) {
+        itemsByDate[date] = [...(itemsByDate[date] || []), ...entries];
+      }
+    }
+  } else {
+    for (const [key, offset] of Object.entries(LEGACY_DAY_OFFSETS)) {
+      const entries = s.itemsByDay?.[key];
+      if (Array.isArray(entries)) itemsByDate[shiftDate(referenceDate, offset)] = entries;
+    }
+  }
+  const legacyOffset = LEGACY_DAY_OFFSETS[s.selectedDay] || 0;
+  const restored = {
     ...base,
     ...s,
-    itemsByDay: { ...base.itemsByDay, ...(s.itemsByDay || {}) },
+    schemaVersion: 2,
+    selectedDate: normalizeDate(s.selectedDate) || shiftDate(todayStr(), legacyOffset),
+    itemsByDate,
     settings: { ...base.settings, ...(s.settings || {}) },
     memo: { ...base.memo, ...(s.memo || {}) },
-    recurringItems: s.recurringItems || [],
-    lastActiveDate: s.lastActiveDate || todayStr(),
+    recurringItems: (s.recurringItems || []).map((item) => ({
+      ...item,
+      lastDone: normalizeDate(item.lastDone),
+    })),
+    lastActiveDate: referenceDate,
   };
-  if (isWindows && state.settings.showOnDesktop) state.settings.alwaysOnTop = false;
-  return state;
+  delete restored.itemsByDay;
+  delete restored.selectedDay;
+  if (isWindows && restored.settings.showOnDesktop) restored.settings.alwaysOnTop = false;
+  return restored;
+}
+
+function load() {
+  let snapshot;
+  try {
+    snapshot = JSON.parse(localStorage.getItem(STORAGE_KEY));
+  } catch (e) {
+    snapshot = null;
+  }
+  if (snapshot?.itemsByDay && !snapshot.itemsByDate) {
+    localStorage.setItem(STORAGE_KEY + "/before-date-history", JSON.stringify(snapshot));
+  }
+  return restoreState(snapshot);
 }
 
 let state = load();
@@ -140,26 +193,21 @@ function save() {
 function rollOverIfNeeded() {
   const today = todayStr();
   const delta = dayDelta(state.lastActiveDate, today);
-  if (delta <= 0) return;
+  if (delta <= 0) return false;
 
-  const offset = { today: 0, tomorrow: 1, dayAfterTomorrow: 2 };
-  const result = { today: [], tomorrow: [], dayAfterTomorrow: [] };
-  let overdue = [];
-
-  for (const day of DAYS) {
-    const items = state.itemsByDay[day] || [];
-    const newOffset = offset[day] - delta;
-    if (newOffset >= 0) {
-      const target = DAYS.find((d) => offset[d] === newOffset);
-      result[target].push(...items);
-    } else {
-      overdue.push(...items.filter((it) => !it.completed));
+  const overdue = [];
+  // 只顺延本次跨天期间到期的任务；更早历史中的编辑不会重新生成今天的任务。
+  const elapsedDates = Object.keys(state.itemsByDate)
+    .filter((date) => date >= state.lastActiveDate && date < today)
+    .sort();
+  for (const date of elapsedDates) {
+    for (const item of state.itemsByDate[date]) {
+      if (!item.completed) overdue.push({ ...item, id: uid(), notified: false });
     }
   }
-  // 过期未完成顺延到今天底部
-  result.today = [...result.today, ...overdue];
-  // 新的一天，今天的待办重置提醒标记
-  result.today = result.today.map((it) => ({ ...it, notified: false }));
+  // 历史任务保留原日期和完成状态，顺延任务使用独立对象和 ID。
+  state.itemsByDate[today] = [...(state.itemsByDate[today] || []), ...overdue]
+    .map((item) => ({ ...item, notified: false }));
 
   // 常驻待办每天重置完成状态与提醒；中断超过一天则连胜清零
   const y = yesterdayStr();
@@ -169,9 +217,11 @@ function rollOverIfNeeded() {
     return reset;
   });
 
-  state.itemsByDay = result;
+  // 跨午夜正在编辑的任务仍属于原日期，避免输入框与当前列表指向不同日期。
+  if (state.selectedDate === state.lastActiveDate && !composerEditId) state.selectedDate = today;
   state.lastActiveDate = today;
   save();
+  return true;
 }
 
 /* ---------------- 业务操作 ---------------- */
@@ -181,53 +231,55 @@ const stableSort = (arr) => [
   ...arr.filter((i) => i.completed),
 ];
 
-function items(day = state.selectedDay) {
-  return state.itemsByDay[day] || [];
+function items(day = state.selectedDate) {
+  return state.itemsByDate[day] || [];
 }
-function incompleteCount(day = state.selectedDay) {
+function incompleteCount(day = state.selectedDate) {
   return items(day).filter((i) => !i.completed).length;
 }
-function completedCount(day = state.selectedDay) {
+function completedCount(day = state.selectedDate) {
   return items(day).filter((i) => i.completed).length;
 }
 
-function addItem(title, day = state.selectedDay, time = null) {
+function addItem(title, day = state.selectedDate, time = null) {
   const t = title.trim();
   if (!t) return null;
   const it = { id: uid(), title: t, detail: "", time, completed: false, notified: false, createdAt: Date.now() };
-  state.itemsByDay[day].unshift(it);
+  if (!state.itemsByDate[day]) state.itemsByDate[day] = [];
+  state.itemsByDate[day].unshift(it);
   save();
   return it;
 }
 function toggleItem(id, day) {
-  const arr = state.itemsByDay[day];
+  const arr = items(day);
   const it = arr.find((i) => i.id === id);
   if (!it) return;
   it.completed = !it.completed;
-  state.itemsByDay[day] = stableSort(arr);
+  state.itemsByDate[day] = stableSort(arr);
   save();
 }
 function deleteItem(id, day) {
-  state.itemsByDay[day] = state.itemsByDay[day].filter((i) => i.id !== id);
+  state.itemsByDate[day] = items(day).filter((i) => i.id !== id);
   save();
 }
 function updateItem(id, day, title, detail) {
-  const it = state.itemsByDay[day].find((i) => i.id === id);
+  const it = items(day).find((i) => i.id === id);
   if (!it) return;
   if (title !== undefined && title.trim()) it.title = title.trim();
   if (detail !== undefined) it.detail = detail.trim();
   save();
 }
 function moveItem(id, from, to) {
-  const arr = state.itemsByDay[from];
+  const arr = items(from);
   const idx = arr.findIndex((i) => i.id === id);
   if (idx < 0) return;
   const [it] = arr.splice(idx, 1);
-  state.itemsByDay[to].unshift(it);
+  if (!state.itemsByDate[to]) state.itemsByDate[to] = [];
+  state.itemsByDate[to].unshift(it);
   save();
 }
 function clearCompleted(day) {
-  state.itemsByDay[day] = state.itemsByDay[day].filter((i) => !i.completed);
+  state.itemsByDate[day] = items(day).filter((i) => !i.completed);
   save();
 }
 
@@ -283,7 +335,7 @@ function updateRecurringTitle(id, title) {
   save();
 }
 function pinAsRecurring(id, from) {
-  const arr = state.itemsByDay[from];
+  const arr = items(from);
   const idx = arr.findIndex((i) => i.id === id);
   if (idx < 0) return;
   const [it] = arr.splice(idx, 1);
@@ -295,7 +347,9 @@ function unpinRecurring(id) {
   const idx = state.recurringItems.findIndex((i) => i.id === id);
   if (idx < 0) return;
   const [it] = state.recurringItems.splice(idx, 1);
-  state.itemsByDay.today.unshift(it);
+  const today = todayStr();
+  if (!state.itemsByDate[today]) state.itemsByDate[today] = [];
+  state.itemsByDate[today].unshift(it);
   save();
 }
 
@@ -343,6 +397,7 @@ let activeMenu = null; // { id, day, kind }
 let appliedWindowMode = null;
 let pendingWindowMode = null;
 let windowModeTask = Promise.resolve();
+let datePickerStart = null;
 
 function applyWindowMode() {
   if (!appWindow) return;
@@ -440,29 +495,42 @@ function render() {
   rollOverIfNeeded();
   applyWindowChrome();
 
-  const day = compact ? "today" : state.selectedDay;
-  const showRecurring = day === "today" && state.recurringItems.length > 0;
-  const cnt = incompleteCount();
+  const today = todayStr();
+  const day = compact ? today : state.selectedDate;
+  const isHistory = day < today;
+  const showRecurring = day === today && state.recurringItems.length > 0;
+  const cnt = incompleteCount(day);
 
   let html = "";
 
   if (!compact) {
-    const sub =
-      cnt === 0 ? "这一页已经清空" : `${DAY_TITLE[state.selectedDay]}还有 ${cnt} 件事`;
+    const sub = isHistory
+      ? `${dateLabel(day)} · ${cnt} 件未完成`
+      : cnt === 0 ? "这一页已经清空" : `${dayTitle(day)}还有 ${cnt} 件事`;
     html += `<div class="header">
-      <div class="titles"><h1>悬浮待办</h1><p>${sub}</p></div>
+      <div class="titles"><h1>悬浮待办</h1><p title="${sub}">${sub}</p></div>
       <div class="spacer"></div>
       <div class="count-pill ${cnt === 0 ? "zero" : ""}">${cnt}</div>
       <button class="icon-btn" data-act="settings" title="设置">${ICONS.gear}</button>
     </div>`;
 
-    html += `<div class="day-picker">`;
-    DAYS.forEach((d, i) => {
-      html += `<div class="day-seg ${state.selectedDay === d ? "sel" : ""}" data-act="day" data-day="${d}">
-        <span class="t">${DAY_TITLE[d]}</span><span class="d">${dateLabel(i)}</span>
-      </div>`;
-    });
-    html += `</div>`;
+    if (!datePickerStart || day < datePickerStart || day > shiftDate(datePickerStart, 2)) {
+      datePickerStart = day < today ? day : today;
+    }
+    if (datePickerStart > today) datePickerStart = today;
+    html += `<div class="day-picker" aria-label="左右滑动切换日期">
+      <button class="day-nav prev" data-act="prevday" title="前一天" aria-label="前一天">${ICONS.chevron}</button>
+      <div class="day-strip">`;
+    for (let offset = 0; offset < 3; offset++) {
+      const date = shiftDate(datePickerStart, offset);
+      html += `<button class="day-seg ${day === date ? "sel" : ""}" data-act="day" data-day="${date}" aria-pressed="${day === date}" title="${date}">
+        <span class="t">${dayTitle(date)}</span><span class="d">${dateLabel(date, false)}</span>
+      </button>`;
+    }
+    html += `</div><button class="day-nav next" data-act="nextday" title="后一天" aria-label="后一天" ${day >= shiftDate(today, 2) ? "disabled" : ""}>${ICONS.chevron}</button></div>`;
+    if (day !== today) {
+      html += `<div class="date-toolbar"><span>${isHistory ? "历史记录" : "未来计划"}</span><button class="link-btn" data-act="today">回到今天</button></div>`;
+    }
   }
 
   if (showRecurring) {
@@ -471,7 +539,7 @@ function render() {
     if (!compact)
       html += `<button class="icon-btn sm" data-act="raddtoggle" title="添加每天常驻待办">${ICONS.plus}</button>`;
     html += `</div>`;
-    state.recurringItems.forEach((it) => (html += rowHtml(it, "today", "recurring")));
+    state.recurringItems.forEach((it) => (html += rowHtml(it, today, "recurring")));
     if (!compact && recurringComposerOpen) {
       html += `<div class="composer sm"><span class="ic">${ICONS.repeat}</span>
         <input id="recur-input" placeholder="添加每天常驻待办" value="${esc(recurDraft)}"/>
@@ -483,8 +551,8 @@ function render() {
   // 列表
   const list = items(day);
   if (list.length === 0) {
-    const a = showRecurring ? `${DAY_TITLE[day]}没有临时待办` : `${DAY_TITLE[day]}还没有待办`;
-    const b = showRecurring ? "上方是每天常驻的事" : "写下一件真正要推进的事";
+    const a = isHistory ? "这一天没有任务记录" : showRecurring ? `${dayTitle(day)}没有临时待办` : `${dayTitle(day)}还没有待办`;
+    const b = isHistory ? "左右滑动查看其他日期" : showRecurring ? "上方是每天常驻的事" : "写下一件真正要推进的事";
     html += `<div class="empty"><div class="ic">${ICONS.note}</div><div class="a">${a}</div><div class="b">${b}</div></div>`;
   } else {
     html += `<div class="list">`;
@@ -498,9 +566,9 @@ function render() {
     }
     // 输入框
     const editing = composerEditId;
-    html += `<div class="composer">
+    if (!isHistory || editing) html += `<div class="composer">
       <span class="ic">${editing ? ICONS.pencil : ICONS.plus}</span>
-      <input id="main-input" placeholder="${editing ? "编辑待办标题" : "添加" + DAY_TITLE[state.selectedDay] + "待办"}" value="${esc(draft)}"/>
+      <input id="main-input" placeholder="${editing ? "编辑待办标题" : "添加" + dayTitle(day) + "待办"}" value="${esc(draft)}"/>
       ${editing ? `<button class="icon-btn sm" data-act="canceledit">${ICONS.x}</button>` : ""}
       <button class="send ${draft.trim() ? "" : "off"}" data-act="submit">${editing ? ICONS.arrowUp : ICONS.arrowUp}</button>
     </div>`;
@@ -551,6 +619,71 @@ let recurringComposerOpen = false;
 let recurEditId = null;
 let focusMain = false;
 let focusRecur = false;
+let dateSwipe = null;
+let ignoreDateClickUntil = 0;
+let dateWheelDistance = 0;
+let lastDateWheelTime = 0;
+let dateWheelHandled = false;
+
+function selectDate(date) {
+  rollOverIfNeeded();
+  if (date > shiftDate(todayStr(), 2)) return;
+  closeMenu();
+  if (composerEditId) {
+    composerEditId = null;
+    composerEditDay = null;
+    draft = "";
+  }
+  state.selectedDate = date;
+  if (date === todayStr()) datePickerStart = date;
+  save();
+  render();
+}
+
+// 在日期栏横向拖动或使用触控板；纵向滚动不切换日期。
+app.addEventListener("pointerdown", (e) => {
+  if (!e.target.closest(".day-strip") || e.button !== 0) return;
+  dateSwipe = { pointerId: e.pointerId, x: e.clientX, y: e.clientY };
+});
+app.addEventListener("pointermove", (e) => {
+  if (!dateSwipe || dateSwipe.pointerId !== e.pointerId) return;
+  const dx = Math.abs(e.clientX - dateSwipe.x);
+  const dy = Math.abs(e.clientY - dateSwipe.y);
+  if (dy > 12 && dy > dx) { dateSwipe = null; return; }
+  if (dx > 12 && dx > dy) {
+    app.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  }
+});
+window.addEventListener("pointerup", (e) => {
+  if (!dateSwipe || dateSwipe.pointerId !== e.pointerId) return;
+  const dx = e.clientX - dateSwipe.x;
+  const dy = e.clientY - dateSwipe.y;
+  dateSwipe = null;
+  if (Math.abs(dx) < 40 || Math.abs(dx) <= Math.abs(dy)) return;
+  ignoreDateClickUntil = performance.now() + 300;
+  selectDate(shiftDate(state.selectedDate, dx < 0 ? 1 : -1));
+});
+window.addEventListener("pointercancel", () => { dateSwipe = null; });
+app.addEventListener("wheel", (e) => {
+  if (!e.target.closest(".day-picker") || e.ctrlKey || e.metaKey) return;
+  const distance = e.shiftKey && !e.deltaX ? e.deltaY : e.deltaX;
+  if (!distance || (!e.shiftKey && Math.abs(distance) <= Math.abs(e.deltaY))) return;
+  e.preventDefault();
+  const now = performance.now();
+  if (now - lastDateWheelTime > 180) {
+    dateWheelDistance = 0;
+    dateWheelHandled = false;
+  }
+  lastDateWheelTime = now;
+  if (dateWheelHandled) return;
+  const pixels = distance * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerWidth : 1);
+  if (Math.sign(pixels) !== Math.sign(dateWheelDistance)) dateWheelDistance = 0;
+  dateWheelDistance += pixels;
+  if (Math.abs(dateWheelDistance) < 40) return;
+  dateWheelHandled = true;
+  selectDate(shiftDate(state.selectedDate, dateWheelDistance > 0 ? 1 : -1));
+}, { passive: false });
 
 function onDragStart(e) {
   if (e.target.closest("button")) return;
@@ -559,6 +692,10 @@ function onDragStart(e) {
 
 /* 事件委托 */
 app.addEventListener("click", (e) => {
+  if (e.target.closest(".day-picker") && performance.now() < ignoreDateClickUntil) {
+    e.preventDefault();
+    return;
+  }
   const link = e.target.closest("a[data-link]");
   if (link) { e.preventDefault(); openExternal(link.dataset.link); return; }
 
@@ -569,9 +706,12 @@ app.addEventListener("click", (e) => {
   const day = el.dataset.day;
 
   switch (act) {
-    case "day": state.selectedDay = day; save(); render(); break;
+    case "day": selectDate(day); break;
+    case "prevday": selectDate(shiftDate(state.selectedDate, -1)); break;
+    case "nextday": selectDate(shiftDate(state.selectedDate, 1)); break;
+    case "today": selectDate(todayStr()); break;
     case "toggle": {
-      const wasOpen = !state.itemsByDay[day].find((i) => i.id === id)?.completed;
+      const wasOpen = !items(day).find((i) => i.id === id)?.completed;
       toggleItem(id, day);
       if (wasOpen) celebrate(el);
       render();
@@ -626,23 +766,25 @@ app.addEventListener("keydown", (e) => {
 });
 
 function commitMain() {
+  rollOverIfNeeded();
   const t = draft.trim();
   if (!t) return;
   if (composerEditId) {
     updateItem(composerEditId, composerEditDay, t, undefined);
     composerEditId = null; composerEditDay = null;
   } else {
-    const { day, time, title } = parseQuickInput(t, state.selectedDay);
+    const { day, time, title } = parseQuickInput(t, state.selectedDate);
     if (!title) return;
     addItem(title, day, time);
-    if (day !== state.selectedDay) state.selectedDay = day;
+    state.selectedDate = day;
   }
+  save();
   draft = ""; focusMain = true; render();
 }
 function startEdit(id, day) {
-  const it = state.itemsByDay[day].find((i) => i.id === id);
+  const it = items(day).find((i) => i.id === id);
   if (!it) return;
-  state.selectedDay = day;
+  state.selectedDate = day;
   composerEditId = id; composerEditDay = day; draft = it.title; focusMain = true;
   render();
 }
@@ -676,9 +818,9 @@ function closeMenu() {
 }
 function openRowMenu(id, day, anchorEl) {
   closeMenu();
-  const it = state.itemsByDay[day].find((i) => i.id === id);
+  const it = items(day).find((i) => i.id === id);
   if (!it) return;
-  const others = DAYS.filter((d) => d !== day);
+  const others = [todayStr(), shiftDate(todayStr(), 1), shiftDate(todayStr(), 2)].filter((date) => date !== day);
   const mask = document.createElement("div");
   mask.className = "menu-mask";
   mask.style.cssText = "position:absolute;inset:0;z-index:55";
@@ -692,7 +834,7 @@ function openRowMenu(id, day, anchorEl) {
     `<button data-m="detail">${ICONS.note}<span>${it.detail ? "编辑描述" : "添加描述"}</span></button>` +
     `<button data-m="pin">${ICONS.repeat}<span>设为每天</span></button>` +
     `<div class="sep"></div>` +
-    others.map((d) => `<button data-m="move:${d}">${ICONS.arrowRight}<span>移到${DAY_TITLE[d]}</span></button>`).join("") +
+    others.map((d) => `<button data-m="move:${d}">${ICONS.arrowRight}<span>移到${dayTitle(d)}</span></button>`).join("") +
     `<div class="sep"></div>` +
     `<button class="danger" data-m="del">${ICONS.trash}<span>删除</span></button>`;
   document.body.appendChild(menu);
@@ -721,12 +863,12 @@ function openRowMenu(id, day, anchorEl) {
 
 /* 描述编辑弹窗 */
 function openDetailEditor(id, day) {
-  const it = state.itemsByDay[day].find((i) => i.id === id);
+  const it = items(day).find((i) => i.id === id);
   if (!it) return;
   const overlay = document.createElement("div");
   overlay.className = "overlay";
   overlay.innerHTML = `<div class="settings" style="margin-top:40px;gap:12px">
-    <h2>${DAY_TITLE[day]}待办详情</h2>
+    <h2>${dateLabel(day)}待办详情</h2>
     <div><div style="font-size:11px;color:var(--text-secondary);margin-bottom:5px">标题</div>
     <div class="composer sm"><input id="de-title" value="${esc(it.title)}"/></div></div>
     <div><div style="font-size:11px;color:var(--text-secondary);margin-bottom:5px">描述</div>
@@ -877,17 +1019,15 @@ async function importBackup(overlay) {
     const content = await TAURI.core.invoke("import_data");
     if (!content) return;
     const parsed = JSON.parse(content);
-    if (!parsed || !parsed.itemsByDay) return;
-    const base = defaultState();
-    state = {
-      ...base,
-      ...parsed,
-      itemsByDay: { ...base.itemsByDay, ...(parsed.itemsByDay || {}) },
-      settings: { ...base.settings, ...(parsed.settings || {}) },
-      memo: { ...base.memo, ...(parsed.memo || {}) },
-      recurringItems: parsed.recurringItems || [],
-    };
-    if (isWindows && state.settings.showOnDesktop) state.settings.alwaysOnTop = false;
+    if (!parsed || (!parsed.itemsByDate && !parsed.itemsByDay)) return;
+    state = restoreState(parsed);
+    datePickerStart = null;
+    composerEditId = null;
+    composerEditDay = null;
+    draft = "";
+    recurEditId = null;
+    recurDraft = "";
+    recurringComposerOpen = false;
     save();
     overlay?.remove();
     applyWindowChrome();
@@ -941,6 +1081,7 @@ async function ensureNotifyPermission() {
 }
 
 async function checkReminders() {
+  if (rollOverIfNeeded()) render();
   const now = nowHHMM();
   const due = [];
   let changed = false;
@@ -951,7 +1092,7 @@ async function checkReminders() {
       changed = true;
     }
   };
-  state.itemsByDay.today.forEach(scan);
+  items(todayStr()).forEach(scan);
   state.recurringItems.forEach(scan);
   if (changed) save();
   if (due.length) {
@@ -994,6 +1135,16 @@ window.addEventListener("resize", updateCompact);
 TAURI?.event?.listen?.("quick-capture", () => {
   closeMenu();
   document.querySelector(".overlay")?.remove();
+  rollOverIfNeeded();
+  if (state.selectedDate < todayStr()) {
+    state.selectedDate = todayStr();
+    if (composerEditId) {
+      composerEditId = null;
+      composerEditDay = null;
+      draft = "";
+    }
+    save();
+  }
   if (compact) expandWindow();
   focusMain = true;
   render();
