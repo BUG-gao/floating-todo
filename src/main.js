@@ -24,7 +24,7 @@ const uid = () =>
 
 function todayStr(d = new Date()) {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  return `${x.getFullYear()}-${x.getMonth() + 1}-${x.getDate()}`;
+  return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`;
 }
 
 function dayDelta(fromStr, toStr) {
@@ -39,6 +39,20 @@ function dateLabel(offset) {
   const d = new Date();
   d.setDate(d.getDate() + offset);
   return `${d.getMonth() + 1}月${d.getDate()}日`;
+}
+
+function dateWithOffset(baseStr, offset) {
+  const [year, month, day] = baseStr.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + offset);
+  return todayStr(date);
+}
+
+function normalizeDateString(value, fallback = todayStr()) {
+  if (typeof value !== "string") return fallback;
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return fallback;
+  return todayStr(new Date(year, month - 1, day));
 }
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -122,8 +136,11 @@ function load() {
     itemsByDay: { ...base.itemsByDay, ...(s.itemsByDay || {}) },
     settings: { ...base.settings, ...(s.settings || {}) },
     memo: { ...base.memo, ...(s.memo || {}) },
-    recurringItems: s.recurringItems || [],
-    lastActiveDate: s.lastActiveDate || todayStr(),
+    recurringItems: (s.recurringItems || []).map((item) => ({
+      ...item,
+      lastDone: item.lastDone ? normalizeDateString(item.lastDone, item.lastDone) : null,
+    })),
+    lastActiveDate: normalizeDateString(s.lastActiveDate),
   };
   if (isWindows && state.settings.showOnDesktop) state.settings.alwaysOnTop = false;
   return state;
@@ -133,6 +150,78 @@ let state = load();
 
 function save() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+/* ---------------- 本地历史文件 ---------------- */
+
+let historyStatus = null;
+let historyError = "";
+let historyQueue = Promise.resolve();
+
+function taskDateForDay(day, baseDate = state.lastActiveDate) {
+  return dateWithOffset(baseDate, DAYS.indexOf(day));
+}
+
+function historyRecord(item, taskDate, kind, status, extra = {}) {
+  return {
+    recordId: `${kind}:${item.id}:${taskDate}`,
+    taskId: item.id,
+    taskDate,
+    title: item.title,
+    detail: item.detail || "",
+    time: item.time || null,
+    kind,
+    status,
+    createdAt: item.createdAt || null,
+    completedAt: item.completedAt || null,
+    archivedAt: Date.now(),
+    ...extra,
+  };
+}
+
+function queueHistory(upserts = [], removeIds = []) {
+  if (!TAURI?.core?.invoke || (!upserts.length && !removeIds.length)) return historyQueue;
+  historyQueue = historyQueue
+    .catch(() => {})
+    .then(() => TAURI.core.invoke("update_history", { upserts, removeIds }))
+    .then((status) => {
+      historyStatus = status;
+      historyError = "";
+      return status;
+    })
+    .catch((error) => {
+      historyError = String(error);
+      console.error("Failed to persist todo history", error);
+      throw error;
+    });
+  return historyQueue;
+}
+
+async function initializeHistory() {
+  if (!TAURI?.core?.invoke) return;
+  try {
+    historyStatus = await TAURI.core.invoke("get_history_status");
+    historyError = "";
+    const completed = [];
+    for (const day of DAYS) {
+      const taskDate = taskDateForDay(day);
+      for (const item of state.itemsByDay[day] || []) {
+        if (item.completed) {
+          completed.push(historyRecord(item, taskDate, "normal", "completed"));
+        }
+      }
+    }
+    if (state.recurringItems.some((item) => item.completed)) {
+      const taskDate = todayStr();
+      state.recurringItems
+        .filter((item) => item.completed)
+        .forEach((item) => completed.push(historyRecord(item, taskDate, "recurring", "completed")));
+    }
+    if (completed.length) await queueHistory(completed);
+  } catch (error) {
+    historyError = String(error);
+    console.error("Failed to initialize todo history", error);
+  }
 }
 
 /* ---------------- 跨天滚动 ---------------- */
@@ -145,6 +234,7 @@ function rollOverIfNeeded() {
   const offset = { today: 0, tomorrow: 1, dayAfterTomorrow: 2 };
   const result = { today: [], tomorrow: [], dayAfterTomorrow: [] };
   let overdue = [];
+  const archived = [];
 
   for (const day of DAYS) {
     const items = state.itemsByDay[day] || [];
@@ -153,7 +243,15 @@ function rollOverIfNeeded() {
       const target = DAYS.find((d) => offset[d] === newOffset);
       result[target].push(...items);
     } else {
-      overdue.push(...items.filter((it) => !it.completed));
+      const taskDate = dateWithOffset(state.lastActiveDate, offset[day]);
+      for (const item of items) {
+        if (item.completed) {
+          archived.push(historyRecord(item, taskDate, "normal", "completed"));
+        } else {
+          archived.push(historyRecord(item, taskDate, "normal", "carried_over"));
+          overdue.push({ ...item, completedAt: null });
+        }
+      }
     }
   }
   // 过期未完成顺延到今天底部
@@ -163,8 +261,17 @@ function rollOverIfNeeded() {
 
   // 常驻待办每天重置完成状态与提醒；中断超过一天则连胜清零
   const y = yesterdayStr();
+  for (let dayOffset = 0; dayOffset < delta; dayOffset++) {
+    const taskDate = dateWithOffset(state.lastActiveDate, dayOffset);
+    for (const item of state.recurringItems) {
+      const completed = item.lastDone === taskDate;
+      archived.push(historyRecord(item, taskDate, "recurring", completed ? "completed" : "missed", {
+        completedAt: completed ? item.completedAt || null : null,
+      }));
+    }
+  }
   state.recurringItems = state.recurringItems.map((it) => {
-    const reset = { ...it, completed: false, notified: false };
+    const reset = { ...it, completed: false, completedAt: null, notified: false };
     if (it.lastDone !== y && it.lastDone !== today) reset.streak = 0;
     return reset;
   });
@@ -172,6 +279,7 @@ function rollOverIfNeeded() {
   state.itemsByDay = result;
   state.lastActiveDate = today;
   save();
+  queueHistory(archived);
 }
 
 /* ---------------- 业务操作 ---------------- */
@@ -204,10 +312,27 @@ function toggleItem(id, day) {
   const it = arr.find((i) => i.id === id);
   if (!it) return;
   it.completed = !it.completed;
+  const taskDate = taskDateForDay(day);
+  const recordId = `normal:${it.id}:${taskDate}`;
+  if (it.completed) {
+    it.completedAt = Date.now();
+    queueHistory([historyRecord(it, taskDate, "normal", "completed")]);
+  } else {
+    it.completedAt = null;
+    queueHistory([], [recordId]);
+  }
   state.itemsByDay[day] = stableSort(arr);
   save();
 }
 function deleteItem(id, day) {
+  const item = state.itemsByDay[day].find((i) => i.id === id);
+  if (!item) return;
+  const taskDate = taskDateForDay(day);
+  queueHistory([
+    historyRecord(item, taskDate, "normal", item.completed ? "completed" : "deleted", {
+      deletedAt: Date.now(),
+    }),
+  ]);
   state.itemsByDay[day] = state.itemsByDay[day].filter((i) => i.id !== id);
   save();
 }
@@ -216,6 +341,10 @@ function updateItem(id, day, title, detail) {
   if (!it) return;
   if (title !== undefined && title.trim()) it.title = title.trim();
   if (detail !== undefined) it.detail = detail.trim();
+  if (it.completed) {
+    const taskDate = taskDateForDay(day);
+    queueHistory([historyRecord(it, taskDate, "normal", "completed")]);
+  }
   save();
 }
 function moveItem(id, from, to) {
@@ -224,6 +353,14 @@ function moveItem(id, from, to) {
   if (idx < 0) return;
   const [it] = arr.splice(idx, 1);
   state.itemsByDay[to].unshift(it);
+  if (it.completed) {
+    const oldDate = taskDateForDay(from);
+    const newDate = taskDateForDay(to);
+    queueHistory(
+      [historyRecord(it, newDate, "normal", "completed")],
+      [`normal:${it.id}:${oldDate}`]
+    );
+  }
   save();
 }
 function clearCompleted(day) {
@@ -254,6 +391,7 @@ function toggleRecurring(id) {
   const today = todayStr();
   if (!it.completed) {
     it.completed = true;
+    it.completedAt = Date.now();
     it.notified = true;
     if (it.lastDone === today) {
       // 今天已计入连胜
@@ -263,23 +401,38 @@ function toggleRecurring(id) {
       it.streak = 1;
     }
     it.lastDone = today;
+    queueHistory([historyRecord(it, today, "recurring", "completed")]);
   } else {
     it.completed = false;
+    it.completedAt = null;
     if (it.lastDone === today) {
       it.streak = Math.max(0, (it.streak || 0) - 1);
       it.lastDone = it.streak > 0 ? yesterdayStr() : null;
     }
+    queueHistory([], [`recurring:${it.id}:${today}`]);
   }
   state.recurringItems = stableSort(state.recurringItems);
   save();
 }
 function deleteRecurring(id) {
+  const item = state.recurringItems.find((i) => i.id === id);
+  if (!item) return;
+  queueHistory([
+    historyRecord(item, todayStr(), "recurring", item.completed ? "completed" : "deleted", {
+      deletedAt: Date.now(),
+    }),
+  ]);
   state.recurringItems = state.recurringItems.filter((i) => i.id !== id);
   save();
 }
 function updateRecurringTitle(id, title) {
   const it = state.recurringItems.find((i) => i.id === id);
-  if (it && title.trim()) it.title = title.trim();
+  if (it && title.trim()) {
+    it.title = title.trim();
+    if (it.completed) {
+      queueHistory([historyRecord(it, todayStr(), "recurring", "completed")]);
+    }
+  }
   save();
 }
 function pinAsRecurring(id, from) {
@@ -296,6 +449,13 @@ function unpinRecurring(id) {
   if (idx < 0) return;
   const [it] = state.recurringItems.splice(idx, 1);
   state.itemsByDay.today.unshift(it);
+  if (it.completed) {
+    const taskDate = todayStr();
+    queueHistory(
+      [historyRecord(it, taskDate, "normal", "completed")],
+      [`recurring:${it.id}:${taskDate}`]
+    );
+  }
   save();
 }
 
@@ -333,6 +493,8 @@ const ICONS = {
   clock: '<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;margin-right:2px"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>',
   download: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
   upload: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>',
+  history: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v5h5"/><path d="M3.5 8a9 9 0 1 1 2 9.5"/><polyline points="12 7 12 12 15 14"/></svg>',
+  folder: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
 };
 
 /* ---------------- 渲染 ---------------- */
@@ -749,6 +911,97 @@ function openDetailEditor(id, day) {
   overlay.querySelector("#de-title")?.focus();
 }
 
+/* ---------------- 历史记录 ---------------- */
+
+const HISTORY_STATUS = {
+  completed: { label: "已完成", className: "completed" },
+  carried_over: { label: "已顺延", className: "carried" },
+  deleted: { label: "已删除", className: "deleted" },
+  missed: { label: "未打卡", className: "missed" },
+};
+
+function historyDateLabel(dateString) {
+  const [year, month, day] = dateString.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  const weekday = "日一二三四五六"[date.getDay()];
+  return `${year}年${month}月${day}日 · 周${weekday}`;
+}
+
+function historyClockLabel(timestamp) {
+  if (!timestamp) return "";
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+async function openHistoryViewer(sourceOverlay) {
+  try {
+    await historyQueue.catch(() => {});
+    const content = await TAURI.core.invoke("read_history");
+    const documentData = JSON.parse(content);
+    const records = Array.isArray(documentData.records) ? documentData.records : [];
+    sourceOverlay?.remove();
+
+    const groups = new Map();
+    for (const record of records) {
+      if (!record.taskDate) continue;
+      if (!groups.has(record.taskDate)) groups.set(record.taskDate, []);
+      groups.get(record.taskDate).push(record);
+    }
+
+    const overlay = document.createElement("div");
+    overlay.className = "overlay";
+    const groupHtml = [...groups.entries()]
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([date, entries]) => `<section class="history-day">
+        <div class="history-day-head"><span>${historyDateLabel(date)}</span><span>${entries.length} 项</span></div>
+        ${entries.map((record) => {
+          const status = HISTORY_STATUS[record.status] || { label: record.status || "已记录", className: "" };
+          const completedClock = historyClockLabel(record.completedAt);
+          const meta = [record.kind === "recurring" ? "每天" : "待办", record.time ? `提醒 ${record.time}` : "", completedClock ? `完成 ${completedClock}` : ""]
+            .filter(Boolean)
+            .join(" · ");
+          return `<div class="history-row">
+            <div class="history-row-main">
+              <div class="history-title">${esc(record.title || "未命名事项")}</div>
+              ${record.detail ? `<div class="history-detail">${esc(record.detail)}</div>` : ""}
+              <div class="history-meta">${esc(meta)}</div>
+            </div>
+            <span class="history-badge ${status.className}">${esc(status.label)}</span>
+          </div>`;
+        }).join("")}
+      </section>`)
+      .join("");
+
+    overlay.innerHTML = `<div class="settings history-settings">
+      <div class="history-header"><div><h2>历史记录</h2><p>共 ${records.length} 条，按事项日期归档</p></div><button class="link-btn" data-history="close">完成</button></div>
+      <div class="history-list">${groupHtml || `<div class="history-empty">还没有历史记录。完成、删除或跨天顺延事项后会自动写入。</div>`}</div>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay || event.target.closest('[data-history="close"]')) overlay.remove();
+    });
+  } catch (error) {
+    historyError = String(error);
+    sourceOverlay?.remove();
+    openSettings();
+  }
+}
+
+async function chooseHistoryDirectory(overlay) {
+  try {
+    const status = await TAURI.core.invoke("choose_history_directory");
+    if (status) {
+      historyStatus = status;
+      historyError = "";
+    }
+  } catch (error) {
+    historyError = String(error);
+  }
+  overlay?.remove();
+  openSettings();
+}
+
 /* ---------------- 设置面板 ---------------- */
 
 function openSettings() {
@@ -756,6 +1009,8 @@ function openSettings() {
   overlay.className = "overlay";
   const s = state.settings;
   const bgHex = s.customBg ? rgbToHex(s.customBg) : "#dceaff";
+  const historyDirectory = historyStatus?.directory || "正在准备默认目录…";
+  const historyCount = historyStatus?.recordCount || 0;
   overlay.innerHTML = `<div class="settings">
     <h2>小组件设置</h2>
     <div class="set-row"><span>始终置顶</span><div class="switch ${s.alwaysOnTop ? "on" : ""}" data-s="alwaysOnTop"></div></div>
@@ -784,6 +1039,16 @@ function openSettings() {
     <div class="set-row" style="gap:8px">
       <button class="data-btn" data-s="export">${ICONS.download}<span>导出备份</span></button>
       <button class="data-btn" data-s="import">${ICONS.upload}<span>导入备份</span></button>
+    </div>
+    <div class="history-storage">
+      <div class="history-storage-head"><span>历史记录</span><span>${historyCount} 条</span></div>
+      <div class="history-path" title="${esc(historyDirectory)}">${esc(historyDirectory)}</div>
+      ${historyError ? `<div class="history-error">写入异常：${esc(historyError)}</div>` : ""}
+      <div class="history-actions">
+        <button class="data-btn" data-s="historyView">${ICONS.history}<span>查看历史</span></button>
+        <button class="data-btn" data-s="historyDirectory">${ICONS.folder}<span>更改目录</span></button>
+      </div>
+      <div class="history-hint">使用人可读 JSON 持久化；每次更新保留一个 .bak 备份。</div>
     </div>
     <div style="font-size:11px;color:var(--text-secondary);line-height:1.6">
       💡 全局快捷键 <b>${navigator.platform.includes("Mac") ? "⌘⇧Space" : "Ctrl+Shift+Space"}</b> 可在任意应用中唤起并聚焦输入框，快速记一笔。<br>
@@ -829,6 +1094,8 @@ function openSettings() {
       else if (key === "autostart") { toggleAutostart(sw); return; }
       else if (key === "export") { exportBackup(); return; }
       else if (key === "import") { importBackup(overlay); return; }
+      else if (key === "historyView") { openHistoryViewer(overlay); return; }
+      else if (key === "historyDirectory") { chooseHistoryDirectory(overlay); return; }
       else if (key === "close") { overlay.remove(); }
       save(); applyWindowChrome(); render();
     }
@@ -868,7 +1135,16 @@ async function toggleAutostart(sw) {
 
 async function exportBackup() {
   try {
-    await TAURI.core.invoke("export_data", { json: JSON.stringify(state, null, 2) });
+    await historyQueue.catch(() => {});
+    let history = null;
+    try {
+      history = JSON.parse(await TAURI.core.invoke("read_history"));
+    } catch (error) {
+      console.error("Failed to include history in backup", error);
+    }
+    await TAURI.core.invoke("export_data", {
+      json: JSON.stringify({ ...state, ...(history ? { history } : {}) }, null, 2),
+    });
   } catch (e) {}
 }
 
@@ -878,17 +1154,22 @@ async function importBackup(overlay) {
     if (!content) return;
     const parsed = JSON.parse(content);
     if (!parsed || !parsed.itemsByDay) return;
+    const importedHistory = parsed.history;
+    const { history: _history, ...snapshot } = parsed;
     const base = defaultState();
     state = {
       ...base,
-      ...parsed,
-      itemsByDay: { ...base.itemsByDay, ...(parsed.itemsByDay || {}) },
-      settings: { ...base.settings, ...(parsed.settings || {}) },
-      memo: { ...base.memo, ...(parsed.memo || {}) },
-      recurringItems: parsed.recurringItems || [],
+      ...snapshot,
+      itemsByDay: { ...base.itemsByDay, ...(snapshot.itemsByDay || {}) },
+      settings: { ...base.settings, ...(snapshot.settings || {}) },
+      memo: { ...base.memo, ...(snapshot.memo || {}) },
+      recurringItems: snapshot.recurringItems || [],
     };
     if (isWindows && state.settings.showOnDesktop) state.settings.alwaysOnTop = false;
     save();
+    if (Array.isArray(importedHistory?.records) && importedHistory.records.length) {
+      await queueHistory(importedHistory.records);
+    }
     overlay?.remove();
     applyWindowChrome();
     render();
@@ -1023,6 +1304,7 @@ TAURI?.event?.listen?.("toggle-desktop-mode", () => {
 updateCompact();
 render();
 applyWindowChrome();
+initializeHistory();
 
 // 跨午夜定期滚动 + 到点提醒
 setInterval(() => render(), 5 * 60 * 1000);
