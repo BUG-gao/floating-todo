@@ -684,6 +684,158 @@ input[type="color"] {
   background: rgba(21, 115, 255, 0.12);
 }
 
+/* ---------- 历史记录 ---------- */
+.history-storage {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 14px;
+  background: rgba(var(--control-bg), calc(var(--control-alpha) * 0.7));
+  border: 1px solid rgba(var(--border), calc(var(--border-alpha) * 0.45));
+}
+.history-storage-head,
+.history-header,
+.history-actions,
+.history-day-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.history-storage-head {
+  font-size: 13px;
+  font-weight: 600;
+}
+.history-storage-head span:last-child,
+.history-day-head span:last-child {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+}
+.history-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  -webkit-user-select: text;
+  user-select: text;
+}
+.history-error {
+  padding: 7px 8px;
+  border-radius: 8px;
+  color: #d63b42;
+  background: rgba(229, 72, 77, 0.1);
+  font-size: 10px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+.history-actions {
+  gap: 8px;
+}
+.history-hint {
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.45;
+}
+.history-settings {
+  width: 300px;
+  height: calc(100% - 48px);
+  max-height: none;
+  margin-top: 24px;
+  gap: 10px;
+}
+.history-header h2 {
+  margin-bottom: 2px;
+}
+.history-header p {
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+.history-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 2px;
+}
+.history-list::-webkit-scrollbar {
+  width: 5px;
+}
+.history-list::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: rgba(120, 130, 150, 0.35);
+}
+.history-day {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.history-day-head {
+  padding: 0 2px;
+  font-size: 11px;
+  font-weight: 650;
+}
+.history-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px;
+  border-radius: 12px;
+  background: rgba(var(--row-bg), var(--row-bg-alpha));
+  border: 1px solid rgba(var(--border), calc(var(--border-alpha) * 0.45));
+}
+.history-row-main {
+  min-width: 0;
+  flex: 1;
+}
+.history-title {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  word-break: break-word;
+}
+.history-detail,
+.history-meta {
+  margin-top: 3px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+.history-badge {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border-radius: 7px;
+  color: var(--text-secondary);
+  background: rgba(120, 130, 150, 0.14);
+  font-size: 9px;
+  font-weight: 650;
+}
+.history-badge.completed {
+  color: var(--green);
+  background: rgba(41, 171, 86, 0.13);
+}
+.history-badge.carried {
+  color: var(--accent);
+  background: rgba(21, 115, 255, 0.12);
+}
+.history-badge.deleted,
+.history-badge.missed {
+  color: #d87820;
+  background: rgba(216, 120, 32, 0.12);
+}
+.history-empty {
+  padding: 28px 14px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: center;
+}
+
 /* ---------- 完成撒花 ---------- */
 .confetti {
   position: fixed;
